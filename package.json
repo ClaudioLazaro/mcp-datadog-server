@@ -1,0 +1,18 @@
+{
+  "name": "mcp-datadog-server",
+  "version": "0.1.0",
+  "description": "MCP server for Datadog (auto-generates tools from Postman collection)",
+  "type": "module",
+  "bin": {
+    "mcp-datadog-server": "src/index.js"
+  },
+  "scripts": {
+    "pretest": "node scripts/validate.js",
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "undici": "^6.19.8"
+  }
+}
