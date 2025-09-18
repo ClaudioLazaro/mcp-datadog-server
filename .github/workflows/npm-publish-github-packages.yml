@@ -16,6 +16,11 @@ on:
           - patch
           - minor
           - major
+      registry:
+        description: 'Registry URL for publish'
+        required: false
+        default: 'https://registry.npmjs.org/'
+        type: string
 
 jobs:
   build:
@@ -42,7 +47,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org/
+          registry-url: ${{ inputs.registry || 'https://registry.npmjs.org/' }}
       - name: Install and test
         run: |
           npm ci
@@ -66,4 +71,6 @@ jobs:
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: |
+          REGISTRY=${{ inputs.registry || 'https://registry.npmjs.org/' }}
+          npm publish --access public --registry "$REGISTRY"
