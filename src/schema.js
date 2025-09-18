@@ -66,16 +66,40 @@ function getOverrideName({ raw, method }) {
     { m: "POST", re: /^api\/v1\/monitor\/validate$/, name: "validate_monitor" },
     { m: "GET", re: /^api\/v1\/monitor$/, name: "get_monitors" },
     { m: "GET", re: /^api\/v1\/monitor\/search$/, name: "search_monitors" },
-    { m: "GET", re: /^api\/v1\/monitor\/groups\/search$/, name: "search_monitor_groups" },
-    { m: "POST", re: /^api\/v1\/monitor\/:monitor_id\/mute$/, name: "mute_monitor" },
-    { m: "POST", re: /^api\/v1\/monitor\/:monitor_id\/unmute$/, name: "unmute_monitor" },
+    {
+      m: "GET",
+      re: /^api\/v1\/monitor\/groups\/search$/,
+      name: "search_monitor_groups",
+    },
+    {
+      m: "POST",
+      re: /^api\/v1\/monitor\/:monitor_id\/mute$/,
+      name: "mute_monitor",
+    },
+    {
+      m: "POST",
+      re: /^api\/v1\/monitor\/:monitor_id\/unmute$/,
+      name: "unmute_monitor",
+    },
     { m: "PUT", re: /^api\/v1\/monitor\/:monitor_id$/, name: "update_monitor" },
-    { m: "DELETE", re: /^api\/v1\/monitor\/:monitor_id$/, name: "delete_monitor" },
+    {
+      m: "DELETE",
+      re: /^api\/v1\/monitor\/:monitor_id$/,
+      name: "delete_monitor",
+    },
     { m: "GET", re: /^api\/v1\/monitor\/:monitor_id$/, name: "get_monitor" },
-    { m: "GET", re: /^api\/v1\/monitor\/can_delete$/, name: "can_delete_monitors" },
+    {
+      m: "GET",
+      re: /^api\/v1\/monitor\/can_delete$/,
+      name: "can_delete_monitors",
+    },
     // Metrics common submit endpoints
     { m: "POST", re: /^api\/v2\/series$/, name: "submit_series" },
-    { m: "POST", re: /^api\/v1\/distribution_points$/, name: "submit_distribution_points" },
+    {
+      m: "POST",
+      re: /^api\/v1\/distribution_points$/,
+      name: "submit_distribution_points",
+    },
   ];
   for (const o of overrides) {
     if (o.m === m && o.re.test(p)) return o.name;
@@ -104,7 +128,11 @@ function friendlyNameFromPath({ raw, method }) {
   ]);
 
   // Special case: Logs intake
-  if (/http-intake\.logs/i.test(raw) && /^api\/v\d+\/logs\/?$/.test(urlPath) && lowerMethod === "POST") {
+  if (
+    /http-intake\.logs/i.test(raw) &&
+    /^api\/v\d+\/logs\/?$/.test(urlPath) &&
+    lowerMethod === "POST"
+  ) {
     return "send_logs";
   }
 
@@ -120,7 +148,8 @@ function friendlyNameFromPath({ raw, method }) {
   let action = null;
   const last = segs[segs.length - 1] || "";
   if (ACTIONS.has(last)) action = last;
-  else if (segs.some((s) => ACTIONS.has(s))) action = segs.filter((s) => ACTIONS.has(s)).slice(-1)[0];
+  else if (segs.some((s) => ACTIONS.has(s)))
+    action = segs.filter((s) => ACTIONS.has(s)).slice(-1)[0];
 
   // Resource parts = segments until first var or action
   let stopAt = segs.length;
@@ -132,27 +161,44 @@ function friendlyNameFromPath({ raw, method }) {
   // Suffix parts: after variable or after resource until end, excluding action word (if action exists)
   let suffixParts = [];
   const startAfter = varIdx !== -1 ? varIdx + 1 : stopAt;
-  suffixParts = segs.slice(startAfter).filter((s) => !ACTIONS.has(s) && !isVarSegment(s));
+  suffixParts = segs
+    .slice(startAfter)
+    .filter((s) => !ACTIONS.has(s) && !isVarSegment(s));
 
   // Determine action based on method if not explicitly present
   if (!action) {
-    action = ({ GET: "get", POST: "create", PUT: "update", PATCH: "update", DELETE: "delete" })[lowerMethod] || lowerMethod.toLowerCase();
+    action =
+      {
+        GET: "get",
+        POST: "create",
+        PUT: "update",
+        PATCH: "update",
+        DELETE: "delete",
+      }[lowerMethod] || lowerMethod.toLowerCase();
     // If GET on a collection provide 'get' not 'list' per user request
   }
 
   // Build resource name
-  const baseResource = resourceParts.length ? resourceParts.join("_") : (suffixParts[0] || "resource");
+  const baseResource = resourceParts.length
+    ? resourceParts.join("_")
+    : suffixParts[0] || "resource";
   const tokens = baseResource.split("_").filter(Boolean);
   if (tokens.length) {
     const lastToken = tokens[tokens.length - 1];
-    tokens[tokens.length - 1] = hasId ? singularize(lastToken) : pluralize(lastToken);
+    tokens[tokens.length - 1] = hasId
+      ? singularize(lastToken)
+      : pluralize(lastToken);
   }
   let resourceName = tokens.join("_");
 
   // Append suffix (e.g., tags, group_states) when meaningful
   if (suffixParts.length && (!action || !ACTIONS.has(action))) {
     resourceName = [resourceName, ...suffixParts].filter(Boolean).join("_");
-  } else if (suffixParts.length && action && ["get", "update", "delete"].includes(action)) {
+  } else if (
+    suffixParts.length &&
+    action &&
+    ["get", "update", "delete"].includes(action)
+  ) {
     resourceName = [resourceName, ...suffixParts].filter(Boolean).join("_");
   }
 
@@ -180,7 +226,11 @@ export function loadPostmanCollection(filePath) {
 export function buildToolsFromPostman(collection, options = {}) {
   const items = collection?.item || [];
   const topLevel = items.map((i) => i.name);
-  const allowed = (process.env.MCP_DD_FOLDERS || options.allowedFolders || "Logs,Monitors,Metrics,Incidents,Dashboards")
+  const allowed = (
+    process.env.MCP_DD_FOLDERS ||
+    options.allowedFolders ||
+    "Logs,Monitors,Metrics,Incidents,Dashboards"
+  )
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
@@ -194,7 +244,12 @@ export function buildToolsFromPostman(collection, options = {}) {
     if (allowed.length && !allowed.includes(category)) continue;
     const req = r.request;
     const method = req.method || "GET";
-    const rawUrlTemplate = req.url?.raw || "";
+    // Drop any baked-in example querystring from the Postman raw URL.
+    // Queries should be provided at call time via args.query.
+    let rawUrlTemplate = req.url?.raw || "";
+    if (rawUrlTemplate.includes("?")) {
+      rawUrlTemplate = rawUrlTemplate.replace(/\?.*$/, "");
+    }
     if (!rawUrlTemplate) continue;
 
     // Determine path variables from url.variable, if present
@@ -222,8 +277,10 @@ export function buildToolsFromPostman(collection, options = {}) {
   for (const [baseName, ops] of grouped.entries()) {
     if (ops.length <= 1) continue;
     for (const op of ops) {
-      const vMatch = op.rawUrlTemplate.match(/\/api\/(v\d+)/i) || op.rawUrlTemplate.match(/(^|\/)v(\d+)(\/|$)/i);
-      const vs = vMatch ? (vMatch[1] || `v${vMatch[2]}`) : null;
+      const vMatch =
+        op.rawUrlTemplate.match(/\/api\/(v\d+)/i) ||
+        op.rawUrlTemplate.match(/(^|\/)v(\d+)(\/|$)/i);
+      const vs = vMatch ? vMatch[1] || `v${vMatch[2]}` : null;
       if (vs && !op.name.endsWith(`_${vs.toLowerCase()}`)) {
         op.name = `${op.name}_${vs.toLowerCase()}`;
       }
@@ -239,7 +296,8 @@ export function buildToolsFromPostman(collection, options = {}) {
 
   const tools = operations.map((op) => ({
     name: op.name,
-    description: op.description?.slice(0, 500) || `${op.method} ${op.rawUrlTemplate}`,
+    description:
+      op.description?.slice(0, 500) || `${op.method} ${op.rawUrlTemplate}`,
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -257,12 +315,13 @@ export function buildToolsFromPostman(collection, options = {}) {
           additionalProperties: true,
         },
         body: {
-          description: "Optional request body (object, array, or raw JSON string)",
+          description:
+            "Optional request body (object, array, or raw JSON string)",
           oneOf: [
             { type: "object" },
             { type: "array" },
             { type: "string" },
-            { type: "null" }
+            { type: "null" },
           ],
         },
         headers: {
@@ -272,14 +331,15 @@ export function buildToolsFromPostman(collection, options = {}) {
         },
         site: {
           type: "string",
-          description: "Datadog site (default from DD_SITE, e.g. datadoghq.com)",
+          description:
+            "Datadog site (default from DD_SITE, e.g. datadoghq.com)",
         },
         subdomain: {
           type: "string",
           description: "Subdomain for baseUrl (default 'api')",
-        }
-      }
-    }
+        },
+      },
+    },
   }));
 
   const operationsByName = new Map(operations.map((o) => [o.name, o]));

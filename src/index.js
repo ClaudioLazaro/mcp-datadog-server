@@ -6,6 +6,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { loadPostmanCollection, buildToolsFromPostman } from "./schema.js";
 import { datadogRequest } from "./http.js";
+import fs from "fs";
+import { registerCustomTools } from "./customTools.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,10 +28,23 @@ function logOnce(msg) {
   }
 }
 
+function getPkgVersion() {
+  try {
+    const raw = fs.readFileSync(
+      path.resolve(__dirname, "../package.json"),
+      "utf8"
+    );
+    const pkg = JSON.parse(raw);
+    return pkg.version || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
 // Create server instance aligned with MCP docs example
 const server = new McpServer({
   name: "mcp-datadog-server",
-  version: "0.1.6",
+  version: getPkgVersion(),
 });
 
 function registerTools() {
@@ -44,24 +59,53 @@ function registerTools() {
       );
     }
     if (toolIndex.tools.length === 0) {
-      const allowed = (process.env.MCP_DD_FOLDERS || "").split(",").map((s) => s.trim()).filter(Boolean);
+      const allowed = (process.env.MCP_DD_FOLDERS || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       logOnce(
-        `No tools loaded. Top-level folders in schema: ${toolIndex.topLevelFolders.join(", ")}. ` +
-          `Current MCP_DD_FOLDERS=${JSON.stringify(allowed)}. Use comma-separated values matching the schema (e.g. Logs,Monitors,Metrics), ` +
+        `No tools loaded. Top-level folders in schema: ${toolIndex.topLevelFolders.join(
+          ", "
+        )}. ` +
+          `Current MCP_DD_FOLDERS=${JSON.stringify(
+            allowed
+          )}. Use comma-separated values matching the schema (e.g. Logs,Monitors,Metrics), ` +
           `or unset MCP_DD_FOLDERS to include all.`
       );
     }
 
     for (const op of toolIndex.operationsByName.values()) {
       const inputSchema = z.object({
-        path: z.record(z.any()).optional().describe(
-          op.pathVariables?.length ? `Path params: ${op.pathVariables.join(", ")}` : "Optional map of path params"
-        ),
-        query: z.record(z.any()).optional().describe("Optional querystring parameters"),
-        body: z.any().optional().describe("Optional request body (object, array, or raw JSON string)"),
-        headers: z.record(z.any()).optional().describe("Optional extra headers to include"),
-        site: z.string().optional().describe("Datadog site (default from DD_SITE, e.g. datadoghq.com)"),
-        subdomain: z.string().optional().describe("Subdomain for baseUrl (default 'api')"),
+        path: z
+          .record(z.any())
+          .optional()
+          .describe(
+            op.pathVariables?.length
+              ? `Path params: ${op.pathVariables.join(", ")}`
+              : "Optional map of path params"
+          ),
+        query: z
+          .record(z.any())
+          .optional()
+          .describe("Optional querystring parameters"),
+        body: z
+          .any()
+          .optional()
+          .describe(
+            "Optional request body (object, array, or raw JSON string)"
+          ),
+        headers: z
+          .record(z.any())
+          .optional()
+          .describe("Optional extra headers to include"),
+        site: z
+          .string()
+          .optional()
+          .describe("Datadog site (default from DD_SITE, e.g. datadoghq.com)"),
+        subdomain: z
+          .string()
+          .optional()
+          .describe("Subdomain for baseUrl (default 'api')"),
       });
 
       server.tool(
@@ -81,8 +125,16 @@ function registerTools() {
               subdomain: args?.subdomain,
             });
 
-            const pretty = typeof response.data === "string" ? response.data : JSON.stringify(response.data, null, 2);
-            const meta = { status: response.status, ok: response.ok, url: response.url, method: response.method };
+            const pretty =
+              typeof response.data === "string"
+                ? response.data
+                : JSON.stringify(response.data, null, 2);
+            const meta = {
+              status: response.status,
+              ok: response.ok,
+              url: response.url,
+              method: response.method,
+            };
             return {
               content: [
                 { type: "text", text: JSON.stringify(meta) },
@@ -94,7 +146,10 @@ function registerTools() {
             return {
               is_error: true,
               content: [
-                { type: "text", text: `Request failed: ${err?.message || String(err)}` },
+                {
+                  type: "text",
+                  text: `Request failed: ${err?.message || String(err)}`,
+                },
               ],
             };
           }
@@ -112,3 +167,12 @@ registerTools();
 
 await server.connect(new StdioServerTransport());
 console.error("[mcp-datadog] Server running on stdio");
+
+try {
+  registerCustomTools(server);
+  logOnce(
+    "Registered curated tools: list_dashboards, get_dashboard, list_monitors"
+  );
+} catch (e) {
+  logOnce(`Failed to register curated tools: ${e?.message || e}`);
+}

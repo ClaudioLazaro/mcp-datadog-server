@@ -13,7 +13,8 @@
 
 - Padrão (stdio): `node src/index.js` ou `make start`
 - Integre no seu host MCP apontando para esse comando (protocolo stdio).
- - O Makefile carrega variáveis de um arquivo `.env` automaticamente (se existir).
+  - O servidor usa `McpServer` e registra todas as tools no startup (como na doc oficial do MCP).
+  - O Makefile carrega variáveis de um arquivo `.env` automaticamente (se existir).
 
 **Configuração no Host MCP (LLM)**
 
@@ -72,9 +73,11 @@ Exemplo 3 (Datadog via npx do pacote publicado):
 ```
 
 Observações:
+
 - O servidor aceita variáveis `DD_API_KEY`/`DD_APP_KEY` ou `DATADOG_API_KEY`/`DATADOG_APP_KEY`.
 - O site pode ser configurado com `DD_SITE` ou `DATADOG_SITE` (ex.: `datadoghq.com`, `datadoghq.eu`, `us3.datadoghq.com`).
 - Você também pode usar `MCP_DD_FOLDERS` para reduzir as tools carregadas (ex.: `Logs,Monitors`).
+- Qualquer querystring de exemplo embutida na coleção Postman é removida na geração das tools. Forneça `query` explicitamente ao chamar a tool.
 
 **Variáveis de Ambiente**
 
@@ -113,6 +116,22 @@ MCP_DD_FOLDERS=Logs,Monitors,Metrics
   - Filtro por pastas de alto nível com `MCP_DD_FOLDERS` (ex.: `Logs,Monitors,Metrics`).
 - Suporte a variáveis de path/query/body/headers por tool.
 - Resolução de `{{baseUrl}}`, `{{site}}`, `{{subdomain}}` conforme seu ambiente.
+
+Curated tools (alto nível)
+
+- Monitors: `list_monitors`, `get_monitor_by_id`, `create_monitor_v1`, `update_monitor_v1`, `delete_monitor_v1`, `mute_monitor_v1`, `unmute_monitor_v1`.
+- Dashboards: `list_dashboards`, `get_dashboard_by_id`, `create_dashboard_v1`, `update_dashboard_v1`, `delete_dashboard_v1`.
+- Logs: `logs_send`, `logs_search_events`, `logs_aggregate_analytics`.
+- Metrics: `metrics_submit_series`, `metrics_query_timeseries`, `metrics_query_scalars`.
+- Incidents: `incidents_list`, `incidents_get`, `incidents_create`, `incidents_update`.
+- Downtimes: `downtimes_list`, `downtimes_create`, `downtimes_cancel`.
+- Events: `events_post`, `events_list`.
+- Notebooks: `notebooks_list`, `notebooks_get`, `notebooks_create`, `notebooks_update`, `notebooks_delete`.
+- Synthetics: `synthetics_list_tests`, `synthetics_get_test`, `synthetics_create_test`, `synthetics_update_test`, `synthetics_delete_test`.
+- SLOs: `slos_list`, `slos_get`, `slos_create`, `slos_update`, `slos_delete`.
+- Users: `users_list`, `users_get`, `users_create`, `users_update`.
+- Roles: `roles_list`, `roles_get`.
+- Teams: `teams_list`, `teams_get`.
 
 **Como as Tools Funcionam**
 
@@ -159,7 +178,7 @@ MCP_DD_FOLDERS=Logs,Monitors,Metrics
 
 **Teste Funcional (Live) com a API do Datadog**
 
-1) Configure `.env` com suas chaves:
+1. Configure `.env` com suas chaves:
 
 ```
 DD_API_KEY=xxxx
@@ -167,13 +186,14 @@ DD_APP_KEY=yyyy
 DD_SITE=datadoghq.com
 ```
 
-2) Rode o teste de fumaça:
+2. Rode o teste de fumaça:
 
 ```
 make smoke
 ```
 
 O script executa:
+
 - `GET /api/v1/validate` para validar as chaves
 - `GET /api/v1/monitor?page_size=1` para listar monitores (pode falhar se a conta/escopo não tiver permissão; o teste segue mesmo assim)
 
