@@ -60,6 +60,7 @@ jobs:
         id: versioning
         env:
           RELEASE_TYPE: ${{ inputs.release_type || 'patch' }}
+          REGISTRY: ${{ inputs.registry || 'https://registry.npmjs.org/' }}
         run: |
           set -euo pipefail
           # Ensure we have all tags locally
@@ -74,6 +75,27 @@ jobs:
             echo "Tag ${NEXT} already exists; bumping patch again..."
             npm version --no-git-tag-version patch
             NEXT="v$(node -p "require('./package.json').version")"
+          done
+
+          # Also ensure version is not already published in the target registry
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          NEXT_NO_V="${NEXT#v}"
+          # Function to check if version exists on registry
+          version_published() {
+            node -e "const v=process.argv[1]; const name=process.argv[2]; const reg=process.argv[3];
+              import('node:child_process').then(({execSync})=>{
+                let out='[]';
+                try { out = execSync(`npm view ${name} versions --json --registry ${reg}`, {stdio:['ignore','pipe','ignore']}).toString(); } catch {}
+                const arr = Array.isArray(JSON.parse(out||'[]')) ? JSON.parse(out||'[]') : [];
+                process.exit(Array.isArray(arr) && arr.includes(v) ? 0 : 1);
+              });" "$1" "$2" "$3"
+          }
+
+          while version_published "$NEXT_NO_V" "$PACKAGE_NAME" "$REGISTRY"; do
+            echo "Registry already has ${PACKAGE_NAME}@${NEXT_NO_V}; bumping patch again..."
+            npm version --no-git-tag-version patch
+            NEXT="v$(node -p "require('./package.json').version")"
+            NEXT_NO_V="${NEXT#v}"
           done
 
           echo "Final version: ${NEXT}"
@@ -102,7 +124,16 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Map common secret names to NODE_AUTH_TOKEN and also export NPM_TOKEN for .npmrc usage
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.NPMJS_TOKEN || secrets.NODE_AUTH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN || secrets.NPMJS_TOKEN || secrets.NODE_AUTH_TOKEN }}
         run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Missing NPM token. Configure one of these repository secrets: NPM_TOKEN (preferred), NPMJS_TOKEN or NODE_AUTH_TOKEN." >&2
+            echo "Create an Automation token at https://www.npmjs.com/settings/<your-user>/tokens and add it as a secret." >&2
+            exit 1
+          fi
           REGISTRY=${{ inputs.registry || 'https://registry.npmjs.org/' }}
+          npm whoami --registry "$REGISTRY"
           npm publish --access public --registry "$REGISTRY"
