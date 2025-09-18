@@ -56,14 +56,46 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Bump version and create tag
+      - name: Bump version and create tag (unique)
+        id: versioning
         env:
           RELEASE_TYPE: ${{ inputs.release_type || 'patch' }}
         run: |
-          npm version "$RELEASE_TYPE" -m "chore(release): %s [skip ci]"
+          set -euo pipefail
+          # Ensure we have all tags locally
+          git fetch --tags --force
+
+          # Initial bump without creating tag
+          npm version --no-git-tag-version "$RELEASE_TYPE"
+
+          # Loop until we find a version whose tag doesn't already exist
+          NEXT="v$(node -p "require('./package.json').version")"
+          while git rev-parse -q --verify "refs/tags/${NEXT}" >/dev/null; do
+            echo "Tag ${NEXT} already exists; bumping patch again..."
+            npm version --no-git-tag-version patch
+            NEXT="v$(node -p "require('./package.json').version")"
+          done
+
+          echo "Final version: ${NEXT}"
+          git add package.json package-lock.json || true
+          git commit -m "chore(release): ${NEXT} [skip ci]" || echo "No changes to commit"
+          git tag -a "${NEXT}" -m "chore(release): ${NEXT#v} [skip ci]"
+          echo "tag=${NEXT}" >> $GITHUB_OUTPUT
+          echo "version=${NEXT#v}" >> $GITHUB_OUTPUT
+
       - name: Push commit and tags
         run: |
-          git push origin HEAD:${{ github.event.repository.default_branch }} --follow-tags
+          set -euo pipefail
+          git push origin HEAD:${{ github.event.repository.default_branch }}
+          git push origin --tags
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versioning.outputs.tag }}
+          name: Release v${{ steps.versioning.outputs.version }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up .npmrc for authentication
         run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
         env:
