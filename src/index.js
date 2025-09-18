@@ -43,6 +43,14 @@ function registerTools() {
         `Loaded ${toolIndex.tools.length} tools. Consider filtering with MCP_DD_FOLDERS to a smaller set.`
       );
     }
+    if (toolIndex.tools.length === 0) {
+      const allowed = (process.env.MCP_DD_FOLDERS || "").split(",").map((s) => s.trim()).filter(Boolean);
+      logOnce(
+        `No tools loaded. Top-level folders in schema: ${toolIndex.topLevelFolders.join(", ")}. ` +
+          `Current MCP_DD_FOLDERS=${JSON.stringify(allowed)}. Use comma-separated values matching the schema (e.g. Logs,Monitors,Metrics), ` +
+          `or unset MCP_DD_FOLDERS to include all.`
+      );
+    }
 
     for (const op of toolIndex.operationsByName.values()) {
       const inputSchema = z.object({
