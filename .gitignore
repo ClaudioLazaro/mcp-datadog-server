@@ -34,4 +34,4 @@ Thumbs.db
 .cache/
 tmp/
 .tmp/
-
+**.tgz
