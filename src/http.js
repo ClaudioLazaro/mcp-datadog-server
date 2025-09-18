@@ -33,6 +33,10 @@ export async function datadogRequest({
   site,
   subdomain,
   timeoutMs = 60000,
+  maxRetries = Number(process.env.MCP_DD_MAX_RETRIES || 2),
+  retryBaseMs = Number(process.env.MCP_DD_RETRY_BASE_MS || 500),
+  retryOnStatuses = [429, 502, 503, 504],
+  respectRetryAfter = true,
 }) {
   const apiKey = process.env.DD_API_KEY || process.env.DATADOG_API_KEY;
   const appKey = process.env.DD_APP_KEY || process.env.DATADOG_APP_KEY || process.env.DD_APPLICATION_KEY;
@@ -66,34 +70,61 @@ export async function datadogRequest({
   // Some endpoints use intake subdomains and may require different auth headers.
   // Datadog supports both header names above for v1/v2 APIs and intake endpoints.
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(urlObj.toString(), {
-      method,
-      headers: reqHeaders,
-      body: body !== undefined && body !== null && method !== "GET" && method !== "HEAD" ?
-        (typeof body === "string" ? body : JSON.stringify(body)) : undefined,
-      signal: controller.signal,
-    });
+  let attempt = 0;
+  while (true) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(urlObj.toString(), {
+        method,
+        headers: reqHeaders,
+        body: body !== undefined && body !== null && method !== "GET" && method !== "HEAD" ?
+          (typeof body === "string" ? body : JSON.stringify(body)) : undefined,
+        signal: controller.signal,
+      });
 
-    const contentType = res.headers.get("content-type") || "";
-    let data;
-    if (contentType.includes("application/json")) {
-      data = await res.json().catch(() => ({ error: "Invalid JSON" }));
-    } else {
-      data = await res.text();
+      const contentType = res.headers.get("content-type") || "";
+      let data;
+      if (contentType.includes("application/json")) {
+        data = await res.json().catch(() => ({ error: "Invalid JSON" }));
+      } else {
+        data = await res.text();
+      }
+
+      // Retry on specific statuses
+      if (!res.ok && retryOnStatuses.includes(res.status) && attempt < maxRetries) {
+        attempt++;
+        let delayMs = retryBaseMs * Math.pow(2, attempt - 1);
+        // Add jitter
+        delayMs += Math.floor(Math.random() * retryBaseMs);
+        if (respectRetryAfter) {
+          const ra = res.headers.get("retry-after");
+          if (ra) {
+            const asInt = parseInt(ra, 10);
+            if (!Number.isNaN(asInt)) {
+              delayMs = asInt * 1000;
+            } else {
+              const dateMs = Date.parse(ra);
+              if (!Number.isNaN(dateMs)) {
+                delayMs = Math.max(0, dateMs - Date.now());
+              }
+            }
+          }
+        }
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+
+      return {
+        status: res.status,
+        ok: res.ok,
+        headers: Object.fromEntries(res.headers.entries()),
+        data,
+        url: urlObj.toString(),
+        method,
+      };
+    } finally {
+      clearTimeout(timer);
     }
-
-    return {
-      status: res.status,
-      ok: res.ok,
-      headers: Object.fromEntries(res.headers.entries()),
-      data,
-      url: urlObj.toString(),
-      method,
-    };
-  } finally {
-    clearTimeout(timer);
   }
 }

@@ -407,10 +407,13 @@ export function registerCustomTools(server) {
     "Search logs (events)",
     SearchLogsSchema,
     async ({ body }) => {
+      const b = { ...(body || {}) };
+      b.page = b.page || { limit: 25 };
+      b.filter = b.filter || { from: "now-15m" };
       const res = await datadogRequest({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/logs/events/search",
-        body,
+        body: b,
       });
       return {
         is_error: !res.ok,
@@ -425,10 +428,12 @@ export function registerCustomTools(server) {
     "Aggregate logs analytics",
     AggregateLogsSchema,
     async ({ body }) => {
+      const b = { ...(body || {}) };
+      b.filter = b.filter || { from: "now-15m" };
       const res = await datadogRequest({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/logs/analytics/aggregate",
-        body,
+        body: b,
       });
       return {
         is_error: !res.ok,
