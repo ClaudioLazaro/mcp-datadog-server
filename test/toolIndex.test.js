@@ -16,4 +16,6 @@ test('buildToolIndex returns operations grouped by name', () => {
     assert.ok(tool.name.length > 0);
   }
   assert.ok(index.operationsByName.size >= index.tools.length);
+  assert.ok(index.operationsByName.has('get_monitor'));
+  assert.ok(index.operationsByName.has('update_monitor'));
 });

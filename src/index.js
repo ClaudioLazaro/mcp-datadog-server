@@ -184,7 +184,9 @@ async function serve(config, options) {
   const runtimeConfig = applyOptionOverrides(config, options);
   const validation = validateConfig(runtimeConfig);
   if (!validation.schemaExists) {
-    throw new Error(`Schema file not found at ${runtimeConfig.schemaPath}`);
+    logOnce(
+      `Schema file not found at ${runtimeConfig.schemaPath}. Using pre-generated tools; run node scripts/generate-tools.js after updating the schema.`
+    );
   }
   if (validation.missing.length) {
     logOnce(

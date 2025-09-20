@@ -1,7 +1,8 @@
 **MCP Datadog Server**
 
 - Servidor MCP (Model Context Protocol) para Datadog.
-- Gera tools automaticamente a partir do Postman Collection `datadog-api-collection-schema.json`.
+- Tools pré-geradas a partir do Postman Collection `datadog-api-collection-schema.json` (arquivo `src/generatedTools.js`).
+- Regere o arquivo gerado com `node scripts/generate-tools.js` caso a collection seja atualizada.
 - Faz chamadas HTTP às APIs do Datadog usando suas chaves (API/Application) via headers.
 
 **Instalação**
@@ -119,11 +120,9 @@ MCP_DD_FOLDERS=Logs,Monitors,Metrics
   - Logs: `send_logs`, `search_logs_events`, `get_logs_events`, `aggregate_logs_analytics`.
   - Metrics: `get_metrics_v1`, `get_metrics_v2`, `get_metric`, `get_metric_tags`, `update_metric`, `submit_series`, `submit_distribution_points`, `query_timeseries`, `query_scalars`, `estimate_metric`.
 - Executar tools (MCP `call_tool`) para qualquer endpoint da coleção.
-- Geração dinâmica de tools a partir do Postman Collection, com:
-  - Naming amigável por heurística (ver `src/schema.js`).
-  - Overrides de nomes para rotas populares (Monitors, Logs intake, Métricas de envio).
-  - Desambiguação por versão automática (`_v1`, `_v2`) quando necessário.
-  - Filtro por pastas de alto nível com `MCP_DD_FOLDERS` (ex.: `Logs,Monitors,Metrics`).
+- Tools pré-geradas garantem nomes estáveis (arquivo `src/generatedTools.js`).
+- Script `node scripts/generate-tools.js` recria o arquivo gerado usando a collection Postman (mantendo as heurísticas de naming em `src/schema.js`).
+- Filtro por pastas de alto nível com `MCP_DD_FOLDERS` (ex.: `Logs,Monitors,Metrics`).
 - Suporte a variáveis de path/query/body/headers por tool.
 - Resolução de `{{baseUrl}}`, `{{site}}`, `{{subdomain}}` conforme seu ambiente.
 

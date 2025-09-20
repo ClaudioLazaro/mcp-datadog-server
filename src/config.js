@@ -63,7 +63,7 @@ export function validateConfig(config) {
   const schemaExists = fs.existsSync(config.schemaPath);
 
   return {
-    ok: missing.length === 0 && schemaExists,
+    ok: missing.length === 0,
     schemaExists,
     missing,
   };
