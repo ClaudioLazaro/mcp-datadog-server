@@ -114,15 +114,18 @@ function registerTools() {
         inputSchema,
         async (args) => {
           try {
+            const { path, query, body, headers, site, subdomain, ...rest } = args || {};
+            const queryParams = { ...query, ...rest };
+
             const response = await datadogRequest({
               method: op.method,
               rawUrlTemplate: op.rawUrlTemplate,
-              pathParams: args?.path || {},
-              query: args?.query || {},
-              body: args?.body,
-              headers: args?.headers || {},
-              site: args?.site,
-              subdomain: args?.subdomain,
+              pathParams: path || {},
+              query: queryParams,
+              body: body,
+              headers: headers || {},
+              site: site,
+              subdomain: subdomain,
             });
 
             const pretty =

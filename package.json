@@ -2,11 +2,25 @@
   "name": "mcp-datadog-server",
   "version": "0.1.9",
   "description": "MCP server for Datadog (auto-generates tools from Postman collection)",
+  "author": "Claudio Lazaro",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/mcp-datadog-server.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "datadog",
+    "llm",
+    "agent"
+  ],
   "type": "module",
   "bin": {
     "mcp-datadog-server": "src/index.js"
   },
   "scripts": {
+    "prepublishOnly": "npm test",
     "pretest": "node scripts/validate.js",
     "start": "node src/index.js",
     "test": "node --test"

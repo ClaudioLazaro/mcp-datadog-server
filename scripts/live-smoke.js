@@ -1,47 +1,69 @@
 import { datadogRequest } from '../src/http.js';
 
-function requireEnv(name) {
-  const v = process.env[name];
-  if (!v) {
-    console.error(`Missing env var: ${name}`);
-    process.exit(1);
-  }
-  return v;
-}
+    async function test(name, fn) {
+      console.log(`\n--- Testing: ${name} ---`);
+      try {
+        const result = await fn();
+        console.log(`✅ PASS: ${name}`, result);
+        return true;
+      } catch (e) {
+        console.error(`❌ FAIL: ${name}`, e);
+        return false;
+      }
+    }
 
-async function main() {
-  // Ensure credentials exist
-  const api = process.env.DD_API_KEY || process.env.DATADOG_API_KEY;
-  const app = process.env.DD_APP_KEY || process.env.DATADOG_APP_KEY || process.env.DD_APPLICATION_KEY;
-  if (!api || !app) {
-    requireEnv('DD_API_KEY (or DATADOG_API_KEY)');
-    requireEnv('DD_APP_KEY (or DATADOG_APP_KEY / DD_APPLICATION_KEY)');
-  }
+    async function main() {
+      const api = process.env.DD_API_KEY || process.env.DATADOG_API_KEY;
+      const app = process.env.DD_APP_KEY || process.env.DATADOG_APP_KEY;
+      if (!api || !app) {
+        throw new Error('Missing DD_API_KEY or DD_APP_KEY');
+      }
 
-  console.log('Smoke test: Validate API key');
-  const validate = await datadogRequest({
-    method: 'GET',
-    rawUrlTemplate: '{{baseUrl}}/api/v1/validate',
-  });
-  console.log('Validate:', validate.status, validate.ok, validate.data);
+      let allPassed = true;
 
-  // Optional quick read to demonstrate another call
-  try {
-    console.log('\nSmoke test: List monitors (page_size=1)');
-    const monitors = await datadogRequest({
-      method: 'GET',
-      rawUrlTemplate: '{{baseUrl}}/api/v1/monitor',
-      query: { page_size: 1 },
+      allPassed &= await test('Validate API key', async () => {
+        const res = await datadogRequest({
+          method: 'GET',
+          rawUrlTemplate: '{{baseUrl}}/api/v1/validate',
+        });
+        if (!res.ok || !res.data.valid) throw new Error(`Validation failed: ${JSON.stringify(res.data)}`);
+        return { status: res.status, valid: res.data.valid };
+      });
+
+      allPassed &= await test('List Monitors (limit 1)', async () => {
+        const res = await datadogRequest({
+          method: 'GET',
+          rawUrlTemplate: '{{baseUrl}}/api/v1/monitor',
+          query: { page_size: 1 },
+        });
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        return { status: res.status, count: res.data?.length };
+      });
+
+      allPassed &= await test('List Events (last 10m)', async () => {
+        const res = await datadogRequest({
+          method: 'GET',
+          rawUrlTemplate: '{{baseUrl}}/api/v1/events',
+          query: {
+            start: Math.floor(Date.now() / 1000) - 600,
+            end: Math.floor(Date.now() / 1000),
+            priority: 'normal',
+            page_size: 1,
+          },
+        });
+        if (!res.ok) throw new Error(`Request failed: ${res.status} ${JSON.stringify(res.data)}`);
+        return { status: res.status, eventCount: res.data?.events?.length };
+      });
+
+      if (!allPassed) {
+        console.error('\nSome smoke tests failed!');
+        process.exit(1);
+      } else {
+        console.log('\nAll smoke tests passed! ✅');
+      }
+    }
+
+    main().catch((e) => {
+      console.error('\nSmoke test suite failed:', e);
+      process.exit(1);
     });
-    console.log('Monitors:', monitors.status, monitors.ok);
-    console.log(typeof monitors.data === 'string' ? monitors.data : JSON.stringify(monitors.data, null, 2));
-  } catch (e) {
-    console.warn('Monitors call failed (this can be expected if permissions are limited):', e.message);
-  }
-}
-
-main().catch((e) => {
-  console.error('Smoke test failed:', e);
-  process.exit(1);
-});
-
