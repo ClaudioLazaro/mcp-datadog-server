@@ -1,7 +1,20 @@
 import { z } from "zod";
 import { datadogRequest } from "./http.js";
 
-export function registerCustomTools(server) {
+function withRequestDefaults(defaults, overrides) {
+  const base = defaults || {};
+  const next = { ...base, ...overrides };
+  if (base.headers || overrides.headers) {
+    next.headers = { ...(base.headers || {}), ...(overrides.headers || {}) };
+  }
+  if (base.query && overrides.query) {
+    next.query = { ...(base.query || {}), ...(overrides.query || {}) };
+  }
+  return next;
+}
+
+export function registerCustomTools(server, requestDefaults = {}) {
+  const callDatadog = (overrides) => datadogRequest(withRequestDefaults(requestDefaults, overrides));
   // Dashboards: list with optional client-side filters
   const ListDashboardsSchema = z.object({
     name: z
@@ -41,7 +54,7 @@ export function registerCustomTools(server) {
     "List dashboards with optional name/tags filters",
     ListDashboardsSchema,
     async ({ name, tags, count = 100, start = 0, shared = false }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/dashboard",
         query: { "filter[shared]": String(shared), count, start },
@@ -94,7 +107,7 @@ export function registerCustomTools(server) {
     "Get dashboard by ID",
     GetDashboardSchema,
     async ({ dashboard_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/dashboard/:dashboard_id",
         pathParams: { dashboard_id },
@@ -162,7 +175,7 @@ export function registerCustomTools(server) {
         monitor_tags,
         group_states,
       };
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/monitor",
         query,
@@ -201,7 +214,7 @@ export function registerCustomTools(server) {
     "Get a monitor by ID",
     GetMonitorSchema,
     async ({ monitor_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/monitor/:monitor_id",
         pathParams: { monitor_id },
@@ -223,7 +236,7 @@ export function registerCustomTools(server) {
     "Create a monitor",
     CreateMonitorSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/monitor",
         body,
@@ -244,7 +257,7 @@ export function registerCustomTools(server) {
     "Update a monitor",
     UpdateMonitorSchema,
     async ({ monitor_id, body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "PUT",
         rawUrlTemplate: "{{baseUrl}}/api/v1/monitor/:monitor_id",
         pathParams: { monitor_id },
@@ -266,7 +279,7 @@ export function registerCustomTools(server) {
     "Mute a monitor",
     MuteMonitorSchema,
     async ({ monitor_id, body = {} }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/monitor/:monitor_id/mute",
         pathParams: { monitor_id },
@@ -287,7 +300,7 @@ export function registerCustomTools(server) {
     "Unmute a monitor",
     UnmuteMonitorSchema,
     async ({ monitor_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/monitor/:monitor_id/unmute",
         pathParams: { monitor_id },
@@ -307,7 +320,7 @@ export function registerCustomTools(server) {
     "Delete a monitor",
     DeleteMonitorSchema,
     async ({ monitor_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "DELETE",
         rawUrlTemplate: "{{baseUrl}}/api/v1/monitor/:monitor_id",
         pathParams: { monitor_id },
@@ -326,7 +339,7 @@ export function registerCustomTools(server) {
     "Create a dashboard",
     CreateDashboardSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/dashboard",
         body,
@@ -347,7 +360,7 @@ export function registerCustomTools(server) {
     "Update a dashboard",
     UpdateDashboardSchema,
     async ({ dashboard_id, body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "PUT",
         rawUrlTemplate: "{{baseUrl}}/api/v1/dashboard/:dashboard_id",
         pathParams: { dashboard_id },
@@ -366,7 +379,7 @@ export function registerCustomTools(server) {
     "Delete a dashboard",
     DeleteDashboardSchema,
     async ({ dashboard_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "DELETE",
         rawUrlTemplate: "{{baseUrl}}/api/v1/dashboard/:dashboard_id",
         pathParams: { dashboard_id },
@@ -389,7 +402,7 @@ export function registerCustomTools(server) {
     "Send logs to intake",
     SendLogsSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "https://http-intake.logs.{{site}}/api/v2/logs",
         body,
@@ -410,7 +423,7 @@ export function registerCustomTools(server) {
       const b = { ...(body || {}) };
       b.page = b.page || { limit: 25 };
       b.filter = b.filter || { from: "now-15m" };
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/logs/events/search",
         body: b,
@@ -430,7 +443,7 @@ export function registerCustomTools(server) {
     async ({ body }) => {
       const b = { ...(body || {}) };
       b.filter = b.filter || { from: "now-15m" };
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/logs/analytics/aggregate",
         body: b,
@@ -451,7 +464,7 @@ export function registerCustomTools(server) {
     "Submit metrics (v2 series)",
     SubmitSeriesSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/series",
         body,
@@ -469,7 +482,7 @@ export function registerCustomTools(server) {
     "Metrics: query timeseries",
     QueryTimeseriesSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/query/timeseries",
         body,
@@ -487,7 +500,7 @@ export function registerCustomTools(server) {
     "Metrics: query scalars",
     QueryScalarsSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/query/scalar",
         body,
@@ -514,7 +527,7 @@ export function registerCustomTools(server) {
       if (query !== undefined) q["filter"] = query;
       if (pageSize !== undefined) q["page[size]"] = pageSize;
       if (pageOffset !== undefined) q["page[offset]"] = pageOffset;
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/incidents",
         query: q,
@@ -532,7 +545,7 @@ export function registerCustomTools(server) {
     "Get incident by ID",
     GetIncidentSchema,
     async ({ incident_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/incidents/:incident_id",
         pathParams: { incident_id },
@@ -550,7 +563,7 @@ export function registerCustomTools(server) {
     "Create incident",
     CreateIncidentSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/incidents",
         body,
@@ -571,7 +584,7 @@ export function registerCustomTools(server) {
     "Update incident",
     UpdateIncidentSchema,
     async ({ incident_id, body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "PATCH",
         rawUrlTemplate: "{{baseUrl}}/api/v2/incidents/:incident_id",
         pathParams: { incident_id },
@@ -593,7 +606,7 @@ export function registerCustomTools(server) {
     "List downtimes",
     ListDowntimesSchema,
     async ({ current_only }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/downtime",
         query: { current_only },
@@ -611,7 +624,7 @@ export function registerCustomTools(server) {
     "Schedule downtime",
     CreateDowntimeSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/downtime",
         body,
@@ -631,7 +644,7 @@ export function registerCustomTools(server) {
     "Cancel downtime",
     CancelDowntimeSchema,
     async ({ downtime_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "DELETE",
         rawUrlTemplate: "{{baseUrl}}/api/v1/downtime/:downtime_id",
         pathParams: { downtime_id },
@@ -650,7 +663,7 @@ export function registerCustomTools(server) {
     "Post event",
     PostEventSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/events",
         body,
@@ -671,7 +684,7 @@ export function registerCustomTools(server) {
     unaggregated: z.boolean().optional(),
   });
   server.tool("events_list", "List events", ListEventsSchema, async (args) => {
-    const res = await datadogRequest({
+    const res = await callDatadog({
       method: "GET",
       rawUrlTemplate: "{{baseUrl}}/api/v1/events",
       query: args,
@@ -697,7 +710,7 @@ export function registerCustomTools(server) {
     "List notebooks",
     NotebooksListSchema,
     async (args) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/notebooks",
         query: args,
@@ -716,7 +729,7 @@ export function registerCustomTools(server) {
     "Get a notebook by ID",
     NotebooksGetSchema,
     async ({ notebook_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/notebooks/:notebook_id",
         pathParams: { notebook_id },
@@ -733,7 +746,7 @@ export function registerCustomTools(server) {
     "Create a notebook",
     NotebooksCreateSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/notebooks",
         body,
@@ -753,7 +766,7 @@ export function registerCustomTools(server) {
     "Update a notebook",
     NotebooksUpdateSchema,
     async ({ notebook_id, body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "PUT",
         rawUrlTemplate: "{{baseUrl}}/api/v1/notebooks/:notebook_id",
         pathParams: { notebook_id },
@@ -773,7 +786,7 @@ export function registerCustomTools(server) {
     "Delete a notebook",
     NotebooksDeleteSchema,
     async ({ notebook_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "DELETE",
         rawUrlTemplate: "{{baseUrl}}/api/v1/notebooks/:notebook_id",
         pathParams: { notebook_id },
@@ -797,7 +810,7 @@ export function registerCustomTools(server) {
     "List Synthetics tests",
     SyntheticsListSchema,
     async (args) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/synthetics/tests",
         query: args,
@@ -814,7 +827,7 @@ export function registerCustomTools(server) {
     "Get a Synthetics test",
     SyntheticsGetSchema,
     async ({ public_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/synthetics/tests/:public_id",
         pathParams: { public_id },
@@ -831,7 +844,7 @@ export function registerCustomTools(server) {
     "Create a Synthetics test",
     SyntheticsCreateSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/synthetics/tests",
         body,
@@ -851,7 +864,7 @@ export function registerCustomTools(server) {
     "Update a Synthetics test",
     SyntheticsUpdateSchema,
     async ({ public_id, body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "PUT",
         rawUrlTemplate: "{{baseUrl}}/api/v1/synthetics/tests/:public_id",
         pathParams: { public_id },
@@ -869,7 +882,7 @@ export function registerCustomTools(server) {
     "Delete a Synthetics test",
     SyntheticsDeleteSchema,
     async ({ public_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "DELETE",
         rawUrlTemplate: "{{baseUrl}}/api/v1/synthetics/tests/:public_id",
         pathParams: { public_id },
@@ -894,7 +907,7 @@ export function registerCustomTools(server) {
     "List Service Level Objectives",
     SlosListSchema,
     async (args) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/slo",
         query: args,
@@ -911,7 +924,7 @@ export function registerCustomTools(server) {
     "Get SLO by ID",
     SlosGetSchema,
     async ({ slo_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v1/slo/:slo_id",
         pathParams: { slo_id },
@@ -928,7 +941,7 @@ export function registerCustomTools(server) {
     "Create SLO",
     SlosCreateSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v1/slo",
         body,
@@ -948,7 +961,7 @@ export function registerCustomTools(server) {
     "Update SLO",
     SlosUpdateSchema,
     async ({ slo_id, body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "PUT",
         rawUrlTemplate: "{{baseUrl}}/api/v1/slo/:slo_id",
         pathParams: { slo_id },
@@ -966,7 +979,7 @@ export function registerCustomTools(server) {
     "Delete SLO",
     SlosDeleteSchema,
     async ({ slo_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "DELETE",
         rawUrlTemplate: "{{baseUrl}}/api/v1/slo/:slo_id",
         pathParams: { slo_id },
@@ -995,7 +1008,7 @@ export function registerCustomTools(server) {
       if (pageSize !== undefined) q["page[size]"] = pageSize;
       if (pageNumber !== undefined) q["page[number]"] = pageNumber;
       if (filter !== undefined) q["filter"] = filter;
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/users",
         query: q,
@@ -1012,7 +1025,7 @@ export function registerCustomTools(server) {
     "Get a user by ID",
     UsersGetSchema,
     async ({ user_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/users/:user_id",
         pathParams: { user_id },
@@ -1029,7 +1042,7 @@ export function registerCustomTools(server) {
     "Create user",
     UsersCreateSchema,
     async ({ body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "POST",
         rawUrlTemplate: "{{baseUrl}}/api/v2/users",
         body,
@@ -1049,7 +1062,7 @@ export function registerCustomTools(server) {
     "Update user",
     UsersUpdateSchema,
     async ({ user_id, body }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "PATCH",
         rawUrlTemplate: "{{baseUrl}}/api/v2/users/:user_id",
         pathParams: { user_id },
@@ -1076,7 +1089,7 @@ export function registerCustomTools(server) {
       const q = {};
       if (pageSize !== undefined) q["page[size]"] = pageSize;
       if (pageNumber !== undefined) q["page[number]"] = pageNumber;
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/roles",
         query: q,
@@ -1092,7 +1105,7 @@ export function registerCustomTools(server) {
     "Get role by ID",
     z.object({ role_id: z.string() }),
     async ({ role_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/roles/:role_id",
         pathParams: { role_id },
@@ -1120,7 +1133,7 @@ export function registerCustomTools(server) {
       if (filter_keyword !== undefined) q["filter[keyword]"] = filter_keyword;
       if (pageSize !== undefined) q["page[size]"] = pageSize;
       if (pageNumber !== undefined) q["page[number]"] = pageNumber;
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/teams",
         query: q,
@@ -1136,7 +1149,7 @@ export function registerCustomTools(server) {
     "Get team by ID",
     z.object({ team_id: z.string() }),
     async ({ team_id }) => {
-      const res = await datadogRequest({
+      const res = await callDatadog({
         method: "GET",
         rawUrlTemplate: "{{baseUrl}}/api/v2/teams/:team_id",
         pathParams: { team_id },

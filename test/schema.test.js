@@ -28,5 +28,12 @@ test('buildToolsFromPostman generates friendly tool names', () => {
   assert.ok(names.has('submit_series'), 'should include submit_series');
   assert.ok(names.has('submit_distribution_points'), 'should include submit_distribution_points');
   assert.ok(names.has('get_metrics_v1') && names.has('get_metrics_v2'), 'should disambiguate v1/v2');
-});
 
+  const getMonitorsTool = tools.find((t) => t.name === 'get_monitors');
+  assert.ok(getMonitorsTool, 'get_monitors tool should be present');
+  assert.equal(
+    getMonitorsTool.input_schema?.additionalProperties,
+    true,
+    'tool schema should allow additional top-level properties'
+  );
+});

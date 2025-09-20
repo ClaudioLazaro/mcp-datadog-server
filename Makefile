@@ -17,20 +17,18 @@ start:
 
 list-tools:
 	@# List generated tools. Use FOLDERS=Logs,Monitors to filter.
-	@$(DOTENV); [ -z "$$FOLDERS" ] && export FOLDERS="Logs,Monitors,Metrics" || true; \
-	node -e "import('./src/schema.js').then(m=>{const c=m.loadPostmanCollection('./datadog-api-collection-schema.json'); const idx=m.buildToolsFromPostman(c,{allowedFolders:process.env.FOLDERS}); console.log('Total tools:', idx.tools.length); console.log(idx.tools.map(t=>t.name).join('\n'));}).catch(e=>{console.error(e);process.exit(1);});"
+	@$(DOTENV); \
+	ARGS="list-tools"; \
+	if [ -n "$$FOLDERS" ]; then ARGS="$$ARGS --folders=$$FOLDERS"; fi; \
+	node src/index.js $$ARGS
 
 document-tools:
 	@# Generate detailed tool documentation in TOOLS.md
-	@$(DOTENV); node -e "import fs from 'fs'; import('./src/schema.js').then(m=>{const c=m.loadPostmanCollection(); const idx=m.buildToolsFromPostman(c); const docs = idx.tools.map(t => `### ${t.name}
-
-${t.description}
-
-**Input Schema:**
-```json
-${JSON.stringify(t.input_schema, null, 2)}
-```
-`).join('\n'); fs.writeFileSync('TOOLS.md', docs); console.log('Generated TOOLS.md');}).catch(e=>{console.error(e);process.exit(1);});"
+	@$(DOTENV); \
+	ARGS="document-tools"; \
+	if [ -n "$$FOLDERS" ]; then ARGS="$$ARGS --folders=$$FOLDERS"; fi; \
+	if [ -n "$$OUTPUT" ]; then ARGS="$$ARGS --output=$$OUTPUT"; fi; \
+	node src/index.js $$ARGS
 
 
 .PHONY: test
@@ -39,4 +37,4 @@ test:
 
 smoke:
 	@# Run a live smoke test against the Datadog API (requires valid keys)
-	@$(DOTENV); node scripts/live-smoke.js
+	@$(DOTENV); node src/index.js smoke-test

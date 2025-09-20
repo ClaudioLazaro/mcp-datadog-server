@@ -1,4 +1,24 @@
 import fs from "fs";
+import { resolveSchemaPath } from "./paths.js";
+
+function normalizeAllowedFolders(input) {
+  let source = input;
+  if (source === undefined) {
+    source = process.env.MCP_DD_FOLDERS;
+  }
+  if (source === undefined || source === null) return null;
+  if (Array.isArray(source)) {
+    const arr = source.map((v) => String(v).trim()).filter(Boolean);
+    return arr.length ? arr : null;
+  }
+  const str = String(source).trim();
+  if (!str || str === "*" || str.toLowerCase() === "all") return null;
+  const arr = str
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return arr.length ? arr : null;
+}
 
 function slugify(str, { max = 64 } = {}) {
   const s = (str || "")
@@ -217,7 +237,7 @@ function toolNameFromRequest(req, _category) {
   return slugify(friendlyNameFromPath({ raw, method }), { max: 96 });
 }
 
-export function loadPostmanCollection(filePath) {
+export function loadPostmanCollection(filePath = resolveSchemaPath()) {
   const raw = fs.readFileSync(filePath, "utf8");
   const json = JSON.parse(raw);
   return json;
@@ -226,14 +246,7 @@ export function loadPostmanCollection(filePath) {
 export function buildToolsFromPostman(collection, options = {}) {
   const items = collection?.item || [];
   const topLevel = items.map((i) => i.name);
-  const allowed = (
-    process.env.MCP_DD_FOLDERS ||
-    options.allowedFolders ||
-    "Logs,Monitors,Metrics,Incidents,Dashboards"
-  )
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const allowed = normalizeAllowedFolders(options.allowedFolders);
 
   const requests = collectRequests(items);
 
@@ -241,7 +254,7 @@ export function buildToolsFromPostman(collection, options = {}) {
 
   for (const r of requests) {
     const category = r.trail[0] || "api";
-    if (allowed.length && !allowed.includes(category)) continue;
+    if (allowed && allowed.length && !allowed.includes(category)) continue;
     const req = r.request;
     const method = req.method || "GET";
     // Drop any baked-in example querystring from the Postman raw URL.
@@ -300,7 +313,7 @@ export function buildToolsFromPostman(collection, options = {}) {
       op.description?.slice(0, 500) || `${op.method} ${op.rawUrlTemplate}`,
     input_schema: {
       type: "object",
-      additionalProperties: false,
+      additionalProperties: true,
       properties: {
         path: {
           type: "object",

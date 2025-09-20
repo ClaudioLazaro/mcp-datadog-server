@@ -16,6 +16,14 @@
   - O servidor usa `McpServer` e registra todas as tools no startup (como na doc oficial do MCP).
   - O Makefile carrega variáveis de um arquivo `.env` automaticamente (se existir).
 
+**CLI utilitária**
+
+- `mcp-datadog-server help` → lista comandos e flags disponíveis
+- `mcp-datadog-server list-tools --folders=Logs,Monitors` → imprime as tools carregadas
+- `mcp-datadog-server document-tools --output=docs/TOOLS.md` → gera documentação completa das tools
+- `mcp-datadog-server doctor --live` → valida configuração local e (opcional) executa smoke tests reais
+- `mcp-datadog-server smoke-test` → executa o conjunto padrão de smoke tests (mesmo que `make smoke`)
+
 **Configuração no Host MCP (LLM)**
 
 - Exemplos de configuração JSON do host MCP para adicionar servidores (Github e Datadog):
@@ -85,7 +93,9 @@ Observações:
 - `DD_SITE` (opcional, padrão `datadoghq.com`)
 - `DD_SUBDOMAIN` (opcional, padrão `api`)
 - `MCP_DD_SCHEMA_PATH` (opcional, caminho do JSON do Postman Collection; padrão é `datadog-api-collection-schema.json` no repositório)
-- `MCP_DD_FOLDERS` (opcional, CSV de pastas topo da coleção para filtrar tools, ex.: `Logs,Monitors,Metrics,Incidents,Dashboards`)
+- `MCP_DD_FOLDERS` (opcional, CSV de pastas topo da coleção para filtrar tools; por padrão **todas** as pastas são carregadas, ex.: `Logs,Monitors,Metrics`)
+- `MCP_DD_USER_AGENT` (opcional, identifica o agente nas chamadas HTTP; padrão `mcp-datadog-server`)
+- `MCP_DD_MAX_RETRIES` / `MCP_DD_RETRY_BASE_MS` / `MCP_DD_RESPECT_RETRY_AFTER` (opcionais, controlam a estratégia de retry automática)
 - `NODE_EXTRA_CA_CERTS` (opcional) caminho para um certificado CA adicional (PEM/CRT) quando sua rede corporativa usa interceptação TLS. Ex.: `NODE_EXTRA_CA_CERTS=/etc/ssl/certs/zscaler.pem` (Linux) ou `NODE_EXTRA_CA_CERTS="C:\\Users\\seu.usuario\\Devops\\zscaler.cer"` (Windows)
 
 Exemplo `.env`:
@@ -172,9 +182,10 @@ Curated tools (alto nível)
 - Use `make` para tarefas comuns:
   - `make install` → instala dependências
   - `make start` → inicia o servidor MCP (stdio)
-  - `make list-tools` → lista tools geradas (use `FOLDERS=Logs,Monitors` para filtrar)
+  - `make list-tools` → lista tools geradas (`FOLDERS=Logs,Monitors` para filtrar)
+  - `make document-tools` → gera TOOLS.md (`OUTPUT=docs/TOOLS.md` para escrever em outro local)
   - `make test` → roda testes unitários e valida o JSON da coleção
-  - `make smoke` → executa um teste funcional real contra a API do Datadog (usa `.env`)
+  - `make smoke` → executa os smoke tests reais contra a API do Datadog (usa `.env`)
 
 **Teste Funcional (Live) com a API do Datadog**
 
@@ -190,6 +201,8 @@ DD_SITE=datadoghq.com
 
 ```
 make smoke
+# ou, diretamente:
+# mcp-datadog-server smoke-test
 ```
 
 O script executa:

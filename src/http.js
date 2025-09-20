@@ -1,5 +1,10 @@
 import { fetch } from "undici";
 
+function hasHeader(headers = {}, name) {
+  const lower = String(name).toLowerCase();
+  return Object.keys(headers || {}).some((key) => key.toLowerCase() === lower);
+}
+
 function substitutePathVariables(template, pathVars = {}) {
   let path = template;
   // Replace Postman-style path variables like :connection_id
@@ -37,6 +42,7 @@ export async function datadogRequest({
   retryBaseMs = Number(process.env.MCP_DD_RETRY_BASE_MS || 500),
   retryOnStatuses = [429, 502, 503, 504],
   respectRetryAfter = true,
+  userAgent = process.env.MCP_DD_USER_AGENT || "mcp-datadog-server",
 }) {
   const apiKey = process.env.DD_API_KEY || process.env.DATADOG_API_KEY;
   const appKey = process.env.DD_APP_KEY || process.env.DATADOG_APP_KEY || process.env.DD_APPLICATION_KEY;
@@ -66,6 +72,10 @@ export async function datadogRequest({
     "DD-APPLICATION-KEY": appKey,
     ...headers,
   };
+
+  if (userAgent && !hasHeader(headers, "user-agent")) {
+    reqHeaders["User-Agent"] = userAgent;
+  }
 
   // Some endpoints use intake subdomains and may require different auth headers.
   // Datadog supports both header names above for v1/v2 APIs and intake endpoints.
