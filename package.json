@@ -1,0 +1,57 @@
+{
+  "name": "mcp-datadog-server",
+  "version": "0.3.0",
+  "description": "Clean, robust MCP server for Datadog API with curated tools and schema-based generation",
+  "author": "Claudio Lazaro",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ClaudioLazaro/mcp-datadog-server.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "datadog",
+    "api",
+    "monitoring",
+    "observability",
+    "llm",
+    "agent",
+    "tools"
+  ],
+  "type": "module",
+  "bin": {
+    "mcp-datadog-server": "src/index.js"
+  },
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./server": "./src/server.js",
+    "./config": "./src/core/config.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "serve": "node src/index.js serve",
+    "list-tools": "node src/index.js list-tools",
+    "validate": "node src/index.js validate",
+    "analyze-schema": "node src/index.js analyze-schema",
+    "test": "node --test test/**/*.test.js",
+    "test:watch": "node --test --watch test/**/*.test.js",
+    "prepublishOnly": "npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "dotenv": "^17.2.2",
+    "undici": "^6.19.8",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/",
+    "datadog-api-collection-schema.json",
+    "README.md",
+    "LICENSE"
+  ]
+}
