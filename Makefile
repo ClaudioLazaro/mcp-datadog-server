@@ -32,8 +32,6 @@ document-tools:
 
 
 .PHONY: test
-test:
-	@$(DOTENV); npm test
 
 smoke:
 	@# Run a live smoke test against the Datadog API (requires valid keys)

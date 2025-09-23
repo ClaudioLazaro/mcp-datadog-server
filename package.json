@@ -34,10 +34,7 @@
     "serve": "node src/index.js serve",
     "list-tools": "node src/index.js list-tools",
     "validate": "node src/index.js validate",
-    "analyze-schema": "node src/index.js analyze-schema",
-    "test": "node --test test/*.js",
-    "test:watch": "node --test --watch test/**/*.test.js",
-    "prepublishOnly": "npm test"
+    "analyze-schema": "node src/index.js analyze-schema"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
