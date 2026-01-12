@@ -13,7 +13,8 @@ function buildUrl(baseUrl, rawUrlTemplate, pathParams = {}) {
   let url = rawUrlTemplate.replace('{{baseUrl}}', baseUrl).replace('{{site}}', baseUrl.split('.').slice(-2).join('.'));
   
   for (const [key, value] of Object.entries(pathParams)) {
-    url = url.replace(`:${key}`, encodeURIComponent(String(value)));
+    const encoded = encodeURIComponent(String(value));
+    url = url.replaceAll(`:${key}`, encoded).replaceAll(`{${key}}`, encoded);
   }
   
   return url;
@@ -31,6 +32,17 @@ function buildQueryString(params) {
   
   const queryString = searchParams.toString();
   return queryString ? `?${queryString}` : '';
+}
+
+function sanitizeHeaders(headers) {
+  if (!headers || typeof headers !== 'object') return {};
+  const forbiddenHeaders = new Set(['dd-api-key', 'dd-application-key', 'user-agent']);
+  return Object.fromEntries(
+    Object.entries(headers).filter(([key, value]) => {
+      if (value === undefined || value === null) return false;
+      return !forbiddenHeaders.has(String(key).toLowerCase());
+    })
+  );
 }
 
 function sleep(ms) {
@@ -53,12 +65,13 @@ export class DatadogClient {
     timeoutMs,
   }) {
     const url = buildUrl(this.baseUrl, rawUrlTemplate, pathParams) + buildQueryString(query);
+    const safeHeaders = sanitizeHeaders(headers);
     const requestHeaders = {
       'DD-API-KEY': this.config.credentials.apiKey,
       'DD-APPLICATION-KEY': this.config.credentials.appKey,
       'User-Agent': this.config.userAgent,
       'Accept': 'application/json',
-      ...headers,
+      ...safeHeaders,
     };
 
     if (body && method !== 'GET' && method !== 'HEAD') {

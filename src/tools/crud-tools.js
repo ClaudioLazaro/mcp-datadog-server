@@ -340,6 +340,14 @@ const DATADOG_RESOURCES = {
 
 function createCrudTool(resource, operation, operationConfig) {
   const toolName = `${operation}_${resource}`;
+  const operationLabel = `${operation.charAt(0).toUpperCase() + operation.slice(1)}`;
+  const operationAction = {
+    create: 'Creating',
+    update: 'Updating',
+    delete: 'Deleting',
+    list: 'Listing',
+    get: 'Getting',
+  }[operation] || `${operationLabel}ing`;
 
   return {
     name: toolName,
@@ -366,23 +374,22 @@ function createCrudTool(resource, operation, operationConfig) {
         progressCallback(createProgressResponse({
           step: 0,
           total: 100,
-          message: `${operation.charAt(0).toUpperCase() + operation.slice(1)}ing ${resource}...`,
+          message: `${operationAction} ${resource}...`,
         }));
       }
 
       try {
-        // Replace path parameters in endpoint
-        let endpoint = operationConfig.endpoint;
+        const endpoint = operationConfig.endpoint;
         const pathParams = {};
+        const pathParamKeys = [...endpoint.matchAll(/{([^}]+)}/g)].map(match => match[1]);
+        const remainingArgs = { ...args };
 
-        // Extract path parameters from args
-        Object.keys(args).forEach(key => {
-          if (endpoint.includes(`{${key}}`)) {
-            pathParams[key] = args[key];
-            endpoint = endpoint.replace(`{${key}}`, args[key]);
-            delete args[key];
+        for (const key of pathParamKeys) {
+          if (Object.prototype.hasOwnProperty.call(remainingArgs, key)) {
+            pathParams[key] = remainingArgs[key];
+            delete remainingArgs[key];
           }
-        });
+        }
 
         if (showProgress && progressCallback) {
           progressCallback(createProgressResponse({
@@ -401,9 +408,9 @@ function createCrudTool(resource, operation, operationConfig) {
         };
 
         if (operationConfig.method === 'GET') {
-          requestConfig.query = args;
+          requestConfig.query = remainingArgs;
         } else {
-          requestConfig.body = args;
+          requestConfig.body = remainingArgs;
         }
 
         const response = await client.request(requestConfig);
@@ -421,7 +428,7 @@ function createCrudTool(resource, operation, operationConfig) {
           progressCallback(createProgressResponse({
             step: 100,
             total: 100,
-            message: `${operation.charAt(0).toUpperCase() + operation.slice(1)} ${resource} completed successfully`,
+            message: `${operationLabel} ${resource} completed successfully`,
           }, response.data));
         }
 
@@ -438,7 +445,7 @@ function createCrudTool(resource, operation, operationConfig) {
           progressCallback(createProgressResponse({
             step: 0,
             total: 100,
-            message: `${operation.charAt(0).toUpperCase() + operation.slice(1)} ${resource} failed: ${error.message}`,
+            message: `${operationLabel} ${resource} failed: ${error.message}`,
           }));
         }
 
