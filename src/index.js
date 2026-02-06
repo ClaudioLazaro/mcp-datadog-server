@@ -19,8 +19,7 @@ function getVersion() {
   }
 }
 
-function log(message, level = 'info') {
-  const timestamp = new Date().toISOString();
+function log(message) {
   console.error(`[mcp-datadog] ${message}`);
 }
 
@@ -54,29 +53,19 @@ async function listToolsCommand(config, options) {
     console.log(`- Categories: ${toolsInfo.categories.join(', ')}`);
 
     if (detailed && toolsInfo.tools) {
-      console.log('\n📋 Tools List (Ordered Alphabetically):\n');
+      console.log('\nTools List (Ordered Alphabetically):\n');
 
       toolsInfo.tools.forEach((tool, index) => {
-        const typeIcon = tool.type === 'curated' ? '🎯' : tool.type === 'crud' ? '⚡' : '🔧';
-        const complexityIcon = {
-          'simple': '🟢',
-          'low': '🟡',
-          'medium': '🟠',
-          'high': '🔴'
-        }[tool.complexity] || '🟠';
-
-        console.log(`${String(index + 1).padStart(3)}. ${typeIcon} ${tool.name}`);
-        console.log(`     Description: ${tool.description.slice(0, 80)}${tool.description.length > 80 ? '...' : ''}`);
-        console.log(`     Category: ${tool.category} | Method: ${tool.method} | API: ${tool.api} | ${complexityIcon} ${tool.complexity}`);
-        console.log(`     Operations: GET ${tool.operations.get} | UPDATE ${tool.operations.update} | DELETE ${tool.operations.delete}`);
+        console.log(`${String(index + 1).padStart(3)}. [${tool.type}] ${tool.name}`);
+        console.log(`     ${tool.description.slice(0, 80)}${tool.description.length > 80 ? '...' : ''}`);
+        console.log(`     Category: ${tool.category}`);
         console.log('');
       });
     } else {
-      console.log('\n💡 Use --detailed to see the ordered tools list with CRUD operations');
+      console.log('\nUse --detailed to see the full tools list');
     }
   }
 }
-
 
 async function validateCommand(config, options) {
   const validation = validateConfig(config);
@@ -127,7 +116,7 @@ async function analyzeSchemaCommand(config, options) {
   if (options?.json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
-    console.log(`Schema Analysis:`);
+    console.log('Schema Analysis:');
     console.log(`- Path: ${config.schemaPath}`);
     console.log(`- Categories: ${categories.length}`);
     console.log(`- Operations: ${operations.length}`);
@@ -157,151 +146,10 @@ async function getToolCommand(config, options, toolName) {
   if (options?.json) {
     console.log(JSON.stringify(toolInfo, null, 2));
   } else {
-    const typeIcon = toolInfo.type === 'curated' ? '🎯' : toolInfo.type === 'crud' ? '⚡' : '🔧';
-    const complexityIcon = {
-      'simple': '🟢',
-      'low': '🟡',
-      'medium': '🟠',
-      'high': '🔴'
-    }[toolInfo.complexity] || '🟠';
-
-    console.log(`${typeIcon} Tool: ${toolInfo.name}`);
+    console.log(`Tool: ${toolInfo.name}`);
     console.log(`Description: ${toolInfo.description}`);
     console.log(`Category: ${toolInfo.category}`);
     console.log(`Type: ${toolInfo.type}`);
-    console.log(`Method: ${toolInfo.method}`);
-    console.log(`API Version: ${toolInfo.api}`);
-    console.log(`Complexity: ${complexityIcon} ${toolInfo.complexity}`);
-
-    if (toolInfo.endpoint) {
-      console.log(`Endpoint: ${toolInfo.endpoint}`);
-    }
-
-    if (toolInfo.type === 'crud') {
-      console.log(`Resource: ${toolInfo.resource}`);
-      console.log(`Operation: ${toolInfo.operation}`);
-    }
-
-    if (toolInfo.usage) {
-      console.log('\nUsage Info:');
-      console.log(`- Frequency: ${toolInfo.usage.frequency}`);
-      console.log(`- Audience: ${toolInfo.usage.audience.join(', ')}`);
-      if (toolInfo.usage.examples?.length > 0) {
-        console.log('- Examples:');
-        toolInfo.usage.examples.forEach(example => {
-          console.log(`  ${example}`);
-        });
-      }
-    }
-
-    console.log('\nAvailable Operations:');
-    console.log(`- GET: ${toolInfo.operations.get}`);
-    console.log(`- UPDATE: ${toolInfo.operations.update}`);
-    console.log(`- DELETE: ${toolInfo.operations.delete}`);
-  }
-}
-
-async function updateToolCommand(config, options, toolName) {
-  if (!toolName) {
-    console.error('Tool name is required. Usage: mcp-datadog-server update-tool <tool-name>');
-    process.exitCode = 1;
-    return;
-  }
-
-  const server = await createServer(config);
-  const toolInfo = server.getToolInfo(toolName);
-
-  if (!toolInfo) {
-    console.error(`Tool '${toolName}' not found.`);
-    process.exitCode = 1;
-    return;
-  }
-
-  if (toolInfo.type === 'generated') {
-    console.log('⚠️  Generated tools cannot be updated directly.');
-    console.log('   They are created from the Datadog API schema.');
-    console.log('   To modify them, update the schema or create a curated version.');
-    return;
-  }
-
-  console.log(`🔧 Updating curated tool: ${toolName}`);
-  console.log('   This would typically involve:');
-  console.log('   - Modifying the tool definition in curated-tools.js');
-  console.log('   - Updating schema, description, or implementation');
-  console.log('   - Restarting the server to apply changes');
-  console.log('\n💡 For now, this is a placeholder for the update functionality.');
-}
-
-async function deleteToolCommand(config, options, toolName) {
-  if (!toolName) {
-    console.error('Tool name is required. Usage: mcp-datadog-server delete-tool <tool-name>');
-    process.exitCode = 1;
-    return;
-  }
-
-  const server = await createServer(config);
-  const toolInfo = server.getToolInfo(toolName);
-
-  if (!toolInfo) {
-    console.error(`Tool '${toolName}' not found.`);
-    process.exitCode = 1;
-    return;
-  }
-
-  if (toolInfo.type === 'generated') {
-    console.log('⚠️  Generated tools cannot be deleted directly.');
-    console.log('   They are created from the Datadog API schema.');
-    console.log('   To remove them, filter them out using --folders option.');
-    return;
-  }
-
-  console.log(`🗑️  Deleting curated tool: ${toolName}`);
-  console.log('   This would typically involve:');
-  console.log('   - Removing the tool definition from curated-tools.js');
-  console.log('   - Restarting the server to apply changes');
-  console.log('\n💡 For now, this is a placeholder for the delete functionality.');
-}
-
-async function showSchemaCommand(config, options, toolName) {
-  if (!toolName) {
-    console.error('Tool name is required. Usage: mcp-datadog-server show-schema <tool-name>');
-    process.exitCode = 1;
-    return;
-  }
-
-  const server = await createServer(config);
-  const schema = server.getToolSchema(toolName);
-
-  if (!schema) {
-    console.error(`Tool '${toolName}' not found.`);
-    process.exitCode = 1;
-    return;
-  }
-
-  if (options?.json) {
-    console.log(JSON.stringify(schema, null, 2));
-  } else {
-    console.log(`📋 Schema for tool: ${toolName}\n`);
-
-    console.log('📄 Input Schema (JSON Schema format):');
-    console.log(JSON.stringify(schema.inputSchema, null, 2));
-
-    if (schema.examples) {
-      console.log('\n💡 Usage Examples:');
-      schema.examples.forEach((example, index) => {
-        console.log(`\n${index + 1}. ${example.description || 'Example'}:`);
-        console.log(JSON.stringify(example.params, null, 2));
-      });
-    }
-
-    if (schema.required && schema.required.length > 0) {
-      console.log(`\n⚠️  Required fields: ${schema.required.join(', ')}`);
-    }
-
-    console.log('\n📝 How to use this tool:');
-    console.log('   The LLM will automatically see this schema through MCP protocol.');
-    console.log('   The schema defines all required and optional parameters.');
-    console.log('   Each field includes descriptions to guide the LLM.');
   }
 }
 
@@ -310,11 +158,10 @@ async function serve(config, options) {
     const server = await createServer({ ...config, ...options });
     await server.start();
   } catch (error) {
-    log(`Failed to start server: ${error.message}`, 'error');
+    log(`Failed to start server: ${error.message}`);
     process.exit(1);
   }
 }
-
 
 function showHelp() {
   console.log(`mcp-datadog-server v${getVersion()}`);
@@ -322,20 +169,17 @@ function showHelp() {
   console.log('Commands:');
   console.log('  serve                Start the MCP server (default)');
   console.log('  list-tools           List available tools');
-  console.log('  get-tool <name>      Get detailed information about a specific tool');
-  console.log('  show-schema <name>   Show the input schema for a specific tool');
-  console.log('  update-tool <name>   Update a specific tool (curated tools only)');
-  console.log('  delete-tool <name>   Delete a specific tool (curated tools only)');
+  console.log('  get-tool <name>      Get information about a specific tool');
   console.log('  validate             Validate configuration');
   console.log('  analyze-schema       Analyze API schema');
   console.log('  version              Print package version');
   console.log('  help                 Show this message');
-  console.log('\nCommon options:');
+  console.log('\nOptions:');
   console.log('  --folders=F1,F2      Filter to specific API categories');
   console.log('  --schema=PATH        Override schema file path');
   console.log('  --site=SITE          Override Datadog site');
   console.log('  --json               Output in JSON format');
-  console.log('  --detailed           Show detailed tools list with CRUD operations');
+  console.log('  --detailed           Show detailed tools list');
 }
 
 async function main() {
@@ -344,12 +188,10 @@ async function main() {
   let commandArgs = [];
   let optionArgs = rawArgs;
 
-  // Parse command and arguments
   if (rawArgs.length && !rawArgs[0].startsWith('--')) {
     command = rawArgs[0];
     const restArgs = rawArgs.slice(1);
 
-    // Separate command arguments from options
     commandArgs = [];
     optionArgs = [];
 
@@ -380,18 +222,6 @@ async function main() {
         await getToolCommand(config, options, commandArgs[0]);
         break;
 
-      case 'show-schema':
-        await showSchemaCommand(config, options, commandArgs[0]);
-        break;
-
-      case 'update-tool':
-        await updateToolCommand(config, options, commandArgs[0]);
-        break;
-
-      case 'delete-tool':
-        await deleteToolCommand(config, options, commandArgs[0]);
-        break;
-
       case 'validate':
         await validateCommand(config, options);
         break;
@@ -418,13 +248,13 @@ async function main() {
         process.exitCode = 1;
     }
   } catch (error) {
-    log(`Command failed: ${error.message}`, 'error');
+    log(`Command failed: ${error.message}`);
     process.exit(1);
   }
 }
 
 main().catch((error) => {
-  log(`Fatal error: ${error.message}`, 'error');
+  log(`Fatal error: ${error.message}`);
   process.exit(1);
 });
 
