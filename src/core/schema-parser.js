@@ -1,5 +1,4 @@
 import fs from 'fs';
-import { z } from 'zod';
 
 const CORE_CATEGORIES = new Set([
   'Dashboards',
@@ -141,44 +140,3 @@ export function parseSchema(schemaPath, allowedFolders = null) {
   }
 }
 
-export function createToolSchema(operation) {
-  const properties = {};
-  
-  if (Object.keys(operation.pathParams).length > 0) {
-    properties.path = {
-      type: 'object',
-      properties: operation.pathParams,
-      required: Object.keys(operation.pathParams),
-      description: 'Path parameters',
-    };
-  }
-  
-  if (Object.keys(operation.queryParams).length > 0) {
-    const required = Object.entries(operation.queryParams)
-      .filter(([, param]) => param.required)
-      .map(([key]) => key);
-      
-    properties.query = {
-      type: 'object',
-      properties: operation.queryParams,
-      ...(required.length > 0 && { required }),
-      description: 'Query parameters',
-    };
-  }
-  
-  if (operation.bodySchema) {
-    properties.body = operation.bodySchema;
-  }
-  
-  properties.headers = {
-    type: 'object',
-    description: 'Additional headers',
-    additionalProperties: { type: 'string' },
-  };
-  
-  return {
-    type: 'object',
-    properties,
-    additionalProperties: false,
-  };
-}
