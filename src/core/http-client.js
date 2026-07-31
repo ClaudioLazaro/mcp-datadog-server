@@ -62,6 +62,43 @@ function sleep(ms) {
 // Methods that can be safely replayed after a 5xx or network failure.
 const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']);
 
+/**
+ * How long the server told us to wait, in ms, or null if it did not say.
+ * Datadog signals throttling with X-RateLimit-Reset (seconds until the window
+ * resets) rather than Retry-After, so both are consulted.
+ */
+function parseServerRetryDelayMs(headers = {}) {
+  const retryAfter = headers['retry-after'];
+  if (retryAfter) {
+    // Retry-After is either delta-seconds or an HTTP-date.
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+    const until = Date.parse(retryAfter);
+    if (!Number.isNaN(until)) return Math.max(0, until - Date.now());
+  }
+
+  const reset = Number(headers['x-ratelimit-reset']);
+  if (Number.isFinite(reset)) return Math.max(0, reset * 1000);
+
+  return null;
+}
+
+/** Human-readable summary of Datadog's rate-limit headers, for error messages. */
+function describeRateLimit(headers = {}) {
+  const parts = [];
+  const name = headers['x-ratelimit-name'];
+  const limit = headers['x-ratelimit-limit'];
+  const period = headers['x-ratelimit-period'];
+  const reset = headers['x-ratelimit-reset'];
+
+  if (name) parts.push(`limit "${name}"`);
+  if (limit && period) parts.push(`${limit} requests per ${period}s`);
+  if (reset) parts.push(`resets in ${reset}s`);
+
+  return parts.join(', ');
+}
+
 export class DatadogClient {
   constructor(config) {
     this.config = config;
@@ -135,6 +172,20 @@ export class DatadogClient {
               + 'Keys from one Datadog site (e.g. datadoghq.com) do not work on another (e.g. us3.datadoghq.com).';
           }
 
+          if (response.statusCode === 429) {
+            const detail = describeRateLimit(result.headers);
+            const waitMs = parseServerRetryDelayMs(result.headers);
+            const waitSeconds = waitMs === null ? null : Math.ceil(waitMs / 1000);
+
+            // Without this guidance the caller typically retries immediately,
+            // which extends the throttling window instead of clearing it.
+            message += ' — Datadog rate limit exceeded'
+              + (detail ? ` (${detail})` : '')
+              + (waitSeconds !== null ? `. Wait at least ${waitSeconds}s before retrying.` : '.')
+              + ' Do not retry immediately. Prefer one query with a higher limit'
+              + ' over several concurrent calls, and narrow the time range.';
+          }
+
           throw new DatadogHttpError(message, response.statusCode, result);
         }
 
@@ -155,28 +206,28 @@ export class DatadogClient {
           break;
         }
 
-        let delayMs = this.config.retryBaseMs * Math.pow(2, attempt);
+        const serverDelayMs = error.status === 429 && this.config.respectRetryAfter
+          ? parseServerRetryDelayMs(error.response?.headers)
+          : null;
 
-        if (error.status === 429 && this.config.respectRetryAfter) {
-          const retryAfter = error.response?.headers?.['retry-after'];
-          if (retryAfter) {
-            // Retry-After is either delta-seconds or an HTTP-date. Parsing a
-            // date with parseInt yields NaN, which setTimeout treats as 0 and
-            // burns every retry instantly.
-            const seconds = Number(retryAfter);
-            if (Number.isFinite(seconds)) {
-              delayMs = seconds * 1000;
-            } else {
-              const until = Date.parse(retryAfter);
-              if (!Number.isNaN(until)) {
-                delayMs = Math.max(0, until - Date.now());
-              }
-            }
+        let delayMs;
+
+        if (serverDelayMs !== null) {
+          // Blocking the tool call for minutes is worse than returning a clear
+          // "wait Ns" error, so give up once the server asks for longer than
+          // we are willing to hold the request open.
+          if (serverDelayMs > this.config.maxRateLimitWaitMs) {
+            break;
           }
+          // Small jitter so parallel tool calls do not all resume together.
+          delayMs = serverDelayMs + Math.random() * 250;
+        } else {
+          const backoff = Math.min(this.config.retryBaseMs * Math.pow(2, attempt), 30000);
+          // Equal jitter: half fixed, half random, to break up retry convoys.
+          delayMs = backoff / 2 + Math.random() * (backoff / 2);
         }
-        
-        delayMs = Math.min(delayMs, 30000);
-        
+
+
         await sleep(delayMs);
       }
     }

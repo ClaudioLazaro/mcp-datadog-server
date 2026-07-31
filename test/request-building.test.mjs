@@ -231,6 +231,69 @@ test('non-idempotent methods are not retried after a 5xx', async () => {
   }
 });
 
+/** Serve a 429 carrying the given headers, and report attempts + error message. */
+async function throttled(headers, overrides) {
+  let attempts = 0;
+  const origin = http.createServer((req, res) => {
+    attempts += 1;
+    res.writeHead(429, headers);
+    res.end('{"errors":["rate limit exceeded"]}');
+  });
+  await new Promise(resolve => origin.listen(0, '127.0.0.1', resolve));
+
+  const throttledClient = new DatadogClient({ ...config, retryBaseMs: 20, ...overrides });
+  throttledClient.baseUrl = `http://127.0.0.1:${origin.address().port}`;
+
+  let message = '';
+  const startedAt = Date.now();
+  await throttledClient
+    .request({ method: 'GET', rawUrlTemplate: '{{baseUrl}}/x' })
+    .catch(error => { message = error.message; });
+
+  origin.close();
+  return { attempts, message, elapsed: Date.now() - startedAt };
+}
+
+test('X-RateLimit-Reset is honored, not just Retry-After', async () => {
+  // Datadog signals throttling with X-RateLimit-Reset; ignoring it meant
+  // falling back to a backoff far shorter than the server asked for.
+  const { attempts, elapsed } = await throttled(
+    { 'x-ratelimit-reset': '1' },
+    { maxRetries: 1, maxRateLimitWaitMs: 20000 }
+  );
+
+  assert.equal(attempts, 2, 'should retry once');
+  assert.ok(elapsed >= 1000, `should wait the full second, waited ${elapsed}ms`);
+});
+
+test('a long rate-limit reset returns immediately instead of blocking the call', async () => {
+  const { attempts, elapsed, message } = await throttled(
+    { 'x-ratelimit-reset': '120' },
+    { maxRetries: 3, maxRateLimitWaitMs: 20000 }
+  );
+
+  assert.equal(attempts, 1, 'must not burn retries on a wait it will not honor');
+  assert.ok(elapsed < 1000, `should fail fast, took ${elapsed}ms`);
+  assert.match(message, /Wait at least 120s/);
+});
+
+test('the 429 message tells the caller what to do instead of retrying', async () => {
+  const { message } = await throttled(
+    {
+      'x-ratelimit-reset': '30',
+      'x-ratelimit-name': 'logs_search',
+      'x-ratelimit-limit': '300',
+      'x-ratelimit-period': '3600',
+    },
+    { maxRetries: 0 }
+  );
+
+  assert.match(message, /logs_search/, 'names the limit that was hit');
+  assert.match(message, /300 requests per 3600s/);
+  assert.match(message, /Wait at least 30s/);
+  assert.match(message, /Do not retry immediately/);
+});
+
 test('a Retry-After HTTP-date does not collapse the backoff to zero', async () => {
   // parseInt('Wed, 21 Oct ...') is NaN, and setTimeout(NaN) fires immediately,
   // burning every retry in a few milliseconds.

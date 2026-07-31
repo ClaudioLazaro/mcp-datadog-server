@@ -46,6 +46,9 @@ export function loadConfig(env = process.env) {
   const maxRetries = parseNumber(env.MCP_DD_MAX_RETRIES, 3);
   const retryBaseMs = parseNumber(env.MCP_DD_RETRY_BASE_MS, 1000);
   const respectRetryAfter = !parseBoolean(env.MCP_DD_IGNORE_RETRY_AFTER, false);
+  // Longest a 429 may block a single tool call before we return an actionable
+  // "wait Ns" error instead of holding the request open.
+  const maxRateLimitWaitMs = parseNumber(env.MCP_DD_MAX_RATE_LIMIT_WAIT_MS, 20000);
   const userAgent = env.MCP_DD_USER_AGENT || 'mcp-datadog-server';
   const timeoutMs = parseNumber(env.MCP_DD_TIMEOUT_MS, 30000);
   const credentials = getCredentials(env);
@@ -58,6 +61,7 @@ export function loadConfig(env = process.env) {
     maxRetries,
     retryBaseMs,
     respectRetryAfter,
+    maxRateLimitWaitMs,
     userAgent,
     timeoutMs,
     credentials,
@@ -112,6 +116,7 @@ export function summarizeConfig(config) {
     maxRetries: config.maxRetries,
     retryBaseMs: config.retryBaseMs,
     respectRetryAfter: config.respectRetryAfter,
+    maxRateLimitWaitMs: config.maxRateLimitWaitMs,
     userAgent: config.userAgent,
     timeoutMs: config.timeoutMs,
     credentials: {
