@@ -277,6 +277,8 @@ const DATADOG_RESOURCES = {
       update: {
         method: 'PATCH',
         endpoint: '/api/v2/users/{user_id}',
+        // The spec marks data.id required for this endpoint (unlike team).
+        jsonApiIdFrom: 'user_id',
         description: 'Update a Datadog user profile.',
         schema: {
           user_id: z.string().describe('User ID'),
@@ -423,9 +425,16 @@ function createCrudTool(resource, operation, operationConfig, jsonApiType) {
             : remainingArgs;
         } else if (jsonApiType) {
           // v2 resources reject flat bodies; they need {data: {type, attributes}}.
-          requestConfig.body = {
-            data: { type: jsonApiType, attributes: remainingArgs },
-          };
+          const data = { type: jsonApiType, attributes: remainingArgs };
+
+          // Some update endpoints also require the resource id inside the body,
+          // even though it already appears in the path.
+          const idFrom = operationConfig.jsonApiIdFrom;
+          if (idFrom && pathParams[idFrom] !== undefined) {
+            data.id = pathParams[idFrom];
+          }
+
+          requestConfig.body = { data };
         } else {
           requestConfig.body = remainingArgs;
         }

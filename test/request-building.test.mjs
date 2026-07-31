@@ -155,6 +155,25 @@ test('v2 CRUD bodies carry the JSON:API envelope, v1 bodies stay flat', async ()
   assert.equal(monitorBody.name, 'M');
 });
 
+test('update_user carries data.id, which the spec marks required', async () => {
+  const result = await callTool(CRUD_TOOLS, 'update_user', { user_id: 'u-1', name: 'New' });
+  const { data } = JSON.parse(result.body);
+
+  assert.equal(data.id, 'u-1');
+  assert.equal(data.type, 'users');
+  assert.deepEqual(data.attributes, { name: 'New' });
+  assert.equal(result.url, '/api/v2/users/u-1', 'id still belongs in the path too');
+});
+
+test('update_team omits data.id, which its schema does not define', async () => {
+  const result = await callTool(CRUD_TOOLS, 'update_team', { team_id: 't-1', name: 'New' });
+  const { data } = JSON.parse(result.body);
+
+  assert.equal(data.id, undefined);
+  assert.equal(data.type, 'team');
+  assert.deepEqual(data.attributes, { name: 'New' });
+});
+
 test('search_logs sends sort as a string', async () => {
   const result = await callTool(CURATED_TOOLS, 'search_logs', {
     query: 'x', from: 'now-1h', to: 'now', limit: 5, sort: '-timestamp',
