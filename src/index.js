@@ -182,8 +182,24 @@ function showHelp() {
   console.log('  --detailed           Show detailed tools list');
 }
 
+const HELP_FLAGS = new Set(['help', '--help', '-h']);
+const VERSION_FLAGS = new Set(['version', '--version', '-v']);
+
 async function main() {
   const rawArgs = process.argv.slice(2);
+
+  // Handle help/version before command parsing: flags starting with `--` are
+  // never treated as a command below, so they must be intercepted here.
+  if (rawArgs.some(arg => HELP_FLAGS.has(arg))) {
+    showHelp();
+    return;
+  }
+
+  if (rawArgs.some(arg => VERSION_FLAGS.has(arg))) {
+    console.log(getVersion());
+    return;
+  }
+
   let command = 'serve';
   let commandArgs = [];
   let optionArgs = rawArgs;
@@ -230,18 +246,6 @@ async function main() {
         await analyzeSchemaCommand(config, options);
         break;
 
-      case 'version':
-      case '--version':
-      case '-v':
-        console.log(getVersion());
-        break;
-
-      case 'help':
-      case '--help':
-      case '-h':
-        showHelp();
-        break;
-
       default:
         console.error(`Unknown command: ${command}`);
         showHelp();
@@ -253,9 +257,23 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  log(`Fatal error: ${error.message}`);
-  process.exit(1);
-});
+function isRunDirectly() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return fs.realpathSync(entry) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+// Only run the CLI when executed as a script. This file is also the package
+// entry point, so importing it must not start a server as a side effect.
+if (isRunDirectly()) {
+  main().catch((error) => {
+    log(`Fatal error: ${error.message}`);
+    process.exit(1);
+  });
+}
 
 export { createServer };

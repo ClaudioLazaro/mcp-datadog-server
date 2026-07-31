@@ -6,31 +6,48 @@
 
 let _mcpServer = null;
 
-const LOG_LEVELS = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
+// MCP spec levels (RFC 5424). An out-of-enum level would be rejected by strict
+// clients, so unknown values are coerced to 'info'.
+const LOG_LEVELS = new Set([
+  'debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
+]);
 
 export function setMcpServer(server) {
   _mcpServer = server;
 }
 
-export function log(message, level = 'info') {
+function writeStderr(data, level) {
   const timestamp = new Date().toISOString();
-  const data = typeof message === 'string' ? message : message;
+  // stderr only — stdout carries the JSON-RPC stream on the stdio transport.
+  console.error(
+    `[${timestamp}] [${level.toUpperCase()}] ${typeof data === 'string' ? data : JSON.stringify(data)}`
+  );
+}
+
+export function log(message, level = 'info') {
+  const data = message;
+  const safeLevel = LOG_LEVELS.has(level) ? level : 'info';
 
   if (_mcpServer) {
     try {
-      _mcpServer.sendLoggingMessage({
-        level,
+      const sent = _mcpServer.sendLoggingMessage({
+        level: safeLevel,
         logger: 'mcp-datadog-server',
         data,
       });
+
+      // sendLoggingMessage is async; a rejected transport write must still
+      // surface somewhere rather than being swallowed.
+      if (sent && typeof sent.catch === 'function') {
+        sent.catch(() => writeStderr(data, safeLevel));
+      }
       return;
     } catch {
-      // Fall through to stderr if MCP logging fails
+      // Fall through to stderr if MCP logging throws synchronously.
     }
   }
 
-  const levelUpper = level.toUpperCase();
-  console.error(`[${timestamp}] [${levelUpper}] ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+  writeStderr(data, safeLevel);
 }
 
 export function debug(message) { log(message, 'debug'); }
