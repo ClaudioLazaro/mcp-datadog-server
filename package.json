@@ -1,6 +1,6 @@
 {
   "name": "mcp-datadog-server",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "MCP-native server for Datadog API with tools, resources, prompts, and schema-based generation",
   "author": "Claudio Lazaro",
   "license": "Apache-2.0",
