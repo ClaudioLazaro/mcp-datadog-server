@@ -55,11 +55,18 @@ export function createCoreTool(operation, client) {
         const { path: pathParams, query, body, headers, ...rest } = args;
         const mergedQuery = { ...query, ...rest };
 
+        const resolvedQuery = {};
+        for (const [key, value] of Object.entries(mergedQuery)) {
+          const paramDef = operation.queryParams?.[key];
+          const originalKey = paramDef?.originalKey || key;
+          resolvedQuery[originalKey] = value;
+        }
+
         const response = await client.request({
           method: operation.method,
           rawUrlTemplate: operation.rawUrlTemplate,
           pathParams,
-          query: mergedQuery,
+          query: resolvedQuery,
           body,
           headers,
         });

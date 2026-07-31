@@ -25,6 +25,10 @@ function normalizeOperationName(name) {
     .replace(/_+/g, '_');
 }
 
+function sanitizeParamKey(key) {
+  return key.replace(/[^a-zA-Z0-9_.-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+}
+
 function parseOperation(item, category) {
   if (!item.request) return null;
   
@@ -55,11 +59,13 @@ function parseOperation(item, category) {
   if (request.url?.query) {
     for (const query of request.url.query) {
       if (query.key) {
-        queryParams[query.key] = {
+        const safeKey = sanitizeParamKey(query.key);
+        queryParams[safeKey] = {
           type: 'string',
           description: query.description || `Query parameter: ${query.key}`,
           required: !query.disabled,
           example: query.value,
+          originalKey: query.key !== safeKey ? query.key : undefined,
         };
       }
     }
