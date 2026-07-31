@@ -35,9 +35,12 @@ export class DatadogMcpServer {
       version: getVersion(),
     });
     this.tools = new Map();
+    this.initialized = false;
   }
 
   async initialize() {
+    if (this.initialized) return;
+
     const validation = validateConfig(this.config);
 
     if (validation.errors.length > 0) {
@@ -64,6 +67,8 @@ export class DatadogMcpServer {
     registerPrompts(this.server);
 
     info(`Registered ${this.tools.size} tools total`);
+
+    this.initialized = true;
   }
 
   /**
