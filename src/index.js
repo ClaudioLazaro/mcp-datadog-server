@@ -39,7 +39,7 @@ function parseOptions(args) {
 }
 
 async function listToolsCommand(config, options) {
-  const server = await createServer(config);
+  const server = await createServer(options);
   const detailed = options?.detailed || options?.verbose;
   const toolsInfo = server.getToolsInfo(detailed);
 
@@ -134,7 +134,7 @@ async function getToolCommand(config, options, toolName) {
     return;
   }
 
-  const server = await createServer(config);
+  const server = await createServer(options);
   const toolInfo = server.getToolInfo(toolName);
 
   if (!toolInfo) {
@@ -155,7 +155,7 @@ async function getToolCommand(config, options, toolName) {
 
 async function serve(config, options) {
   try {
-    const server = await createServer({ ...config, ...options });
+    const server = await createServer(options);
     await server.start();
   } catch (error) {
     log(`Failed to start server: ${error.message}`);
@@ -222,6 +222,22 @@ async function main() {
 
   const options = parseOptions(optionArgs);
   const config = loadConfig();
+
+  // Apply CLI overrides so the commands that inspect config directly
+  // (validate, analyze-schema) see the same view createServer builds.
+  const schemaOverride = options.schema || options.schemaPath;
+  if (schemaOverride) {
+    config.schemaPath = path.resolve(process.cwd(), schemaOverride);
+  }
+  if (options.folders) {
+    config.allowedFolders = String(options.folders)
+      .split(',')
+      .map(folder => folder.trim())
+      .filter(Boolean);
+  }
+  if (options.site) {
+    config.site = options.site;
+  }
 
   try {
     switch (command) {

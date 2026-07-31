@@ -322,8 +322,15 @@ export class DatadogMcpServer {
 export async function createServer(options = {}) {
   const config = loadConfig(options.env || process.env);
 
-  if (options.schemaPath) {
-    config.schemaPath = path.resolve(process.cwd(), options.schemaPath);
+  // Apply raw overrides first: callers often spread an existing config into
+  // options, and its null `allowedFolders` would otherwise clobber the value
+  // derived from `folders` below.
+  Object.assign(config, options);
+
+  // `--schema` and `--folders` arrive from parseOptions as `schema`/`folders`.
+  const schemaPath = options.schemaPath || options.schema;
+  if (schemaPath) {
+    config.schemaPath = path.resolve(process.cwd(), schemaPath);
   }
 
   if (options.folders) {
@@ -331,8 +338,6 @@ export async function createServer(options = {}) {
       ? options.folders
       : options.folders.split(',').map(f => f.trim()).filter(Boolean);
   }
-
-  Object.assign(config, options);
 
   const server = new DatadogMcpServer(config);
   await server.initialize();

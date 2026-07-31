@@ -63,7 +63,11 @@ function parseOperation(item, category) {
         queryParams[safeKey] = {
           type: 'string',
           description: query.description || `Query parameter: ${query.key}`,
-          required: !query.disabled,
+          // Postman only sets `disabled` on unchecked params, so presence in the
+          // example URL says nothing about whether Datadog requires it. Marking
+          // them required made 42 operations impossible to call. Let the API
+          // report genuinely missing params instead.
+          required: false,
           example: query.value,
           originalKey: query.key !== safeKey ? query.key : undefined,
         };

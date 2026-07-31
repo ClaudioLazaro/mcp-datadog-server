@@ -198,7 +198,7 @@ const CURATED_TOOLS = {
               from,
               to,
             },
-            sort: [sort],
+            sort,
             page: { limit },
           },
         });
