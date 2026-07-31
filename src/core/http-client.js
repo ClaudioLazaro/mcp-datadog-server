@@ -115,11 +115,14 @@ export class DatadogClient {
         };
 
         if (!result.ok && response.statusCode >= 400) {
-          throw new DatadogHttpError(
-            `HTTP ${response.statusCode}: ${responseText || response.statusMessage}`,
-            response.statusCode,
-            result
-          );
+          let message = `HTTP ${response.statusCode}: ${responseText || response.statusMessage}`;
+
+          if (response.statusCode === 401 || response.statusCode === 403) {
+            message += ` — Check that DD_API_KEY and DD_APP_KEY are valid for site "${this.config.site}". `
+              + 'Keys from one Datadog site (e.g. datadoghq.com) do not work on another (e.g. us3.datadoghq.com).';
+          }
+
+          throw new DatadogHttpError(message, response.statusCode, result);
         }
 
         return result;
