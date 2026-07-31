@@ -34,7 +34,14 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      
+      # Gates the publish below: catches MCP protocol regressions such as tool
+      # input schemas with keys the Anthropic API rejects.
+      - name: Run MCP protocol conformance tests
+        run: npm test
+        env:
+          DD_API_KEY: test-api-key
+          DD_APP_KEY: test-app-key
+
   publish-npm:
     needs: build
     runs-on: ubuntu-latest

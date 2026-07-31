@@ -52,21 +52,46 @@ export function createCoreTool(operation, client) {
 
     async execute(args = {}) {
       try {
-        const { path: pathParams, query, body, headers, ...rest } = args;
-        const mergedQuery = { ...query, ...rest };
+        // The tool schema is flat: path and query params are top-level keys.
+        // Route each arg by consulting the operation definition rather than
+        // destructuring reserved names — several Datadog operations have a
+        // query param literally called "query".
+        const pathParams = {};
+        const query = {};
+        let body;
+        let headers;
 
-        const resolvedQuery = {};
-        for (const [key, value] of Object.entries(mergedQuery)) {
-          const paramDef = operation.queryParams?.[key];
-          const originalKey = paramDef?.originalKey || key;
-          resolvedQuery[originalKey] = value;
+        for (const [key, value] of Object.entries(args)) {
+          if (operation.pathParams?.[key]) {
+            pathParams[key] = value;
+            continue;
+          }
+
+          const queryParam = operation.queryParams?.[key];
+          if (queryParam) {
+            // Restore bracket notation (page_size -> page[size]) for the wire.
+            query[queryParam.originalKey || key] = value;
+            continue;
+          }
+
+          if (key === 'body') {
+            body = value;
+            continue;
+          }
+
+          if (key === 'headers') {
+            headers = value;
+            continue;
+          }
+
+          query[key] = value;
         }
 
         const response = await client.request({
           method: operation.method,
           rawUrlTemplate: operation.rawUrlTemplate,
           pathParams,
-          query: resolvedQuery,
+          query,
           body,
           headers,
         });

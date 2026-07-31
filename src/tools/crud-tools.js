@@ -170,6 +170,8 @@ const DATADOG_RESOURCES = {
           count: z.number().int().min(1).max(1000).optional().describe('Number of dashboards to return'),
           start: z.number().int().min(0).optional().describe('Offset for pagination'),
         },
+        // Datadog expects bracket notation, which is not a legal MCP property key.
+        queryMap: { filter_shared: 'filter[shared]', filter_deleted: 'filter[deleted]' },
         annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
       },
     },
@@ -247,6 +249,8 @@ const DATADOG_RESOURCES = {
   user: {
     name: 'user',
     category: 'Users',
+    // v2 endpoints require the JSON:API envelope: {data: {type, attributes}}.
+    jsonApiType: 'users',
     operations: {
       create: {
         method: 'POST',
@@ -273,6 +277,8 @@ const DATADOG_RESOURCES = {
       update: {
         method: 'PATCH',
         endpoint: '/api/v2/users/{user_id}',
+        // The spec marks data.id required for this endpoint (unlike team).
+        jsonApiIdFrom: 'user_id',
         description: 'Update a Datadog user profile.',
         schema: {
           user_id: z.string().describe('User ID'),
@@ -301,6 +307,7 @@ const DATADOG_RESOURCES = {
           sort: z.string().optional().describe('Sort order'),
           filter: z.string().optional().describe('Filter query'),
         },
+        queryMap: { page_size: 'page[size]', page_number: 'page[number]' },
         annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
       },
     },
@@ -309,10 +316,11 @@ const DATADOG_RESOURCES = {
   team: {
     name: 'team',
     category: 'Teams',
+    jsonApiType: 'team',
     operations: {
       create: {
         method: 'POST',
-        endpoint: '/api/v2/teams',
+        endpoint: '/api/v2/team',
         description: 'Create a new Datadog team.',
         schema: {
           name: z.string().describe('Team name'),
@@ -324,7 +332,7 @@ const DATADOG_RESOURCES = {
       },
       get: {
         method: 'GET',
-        endpoint: '/api/v2/teams/{team_id}',
+        endpoint: '/api/v2/team/{team_id}',
         description: 'Get Datadog team details by ID.',
         schema: {
           team_id: z.string().describe('Team ID'),
@@ -333,7 +341,7 @@ const DATADOG_RESOURCES = {
       },
       update: {
         method: 'PATCH',
-        endpoint: '/api/v2/teams/{team_id}',
+        endpoint: '/api/v2/team/{team_id}',
         description: 'Update a Datadog team.',
         schema: {
           team_id: z.string().describe('Team ID'),
@@ -346,7 +354,7 @@ const DATADOG_RESOURCES = {
       },
       delete: {
         method: 'DELETE',
-        endpoint: '/api/v2/teams/{team_id}',
+        endpoint: '/api/v2/team/{team_id}',
         description: 'Delete a Datadog team.',
         schema: {
           team_id: z.string().describe('Team ID'),
@@ -355,13 +363,18 @@ const DATADOG_RESOURCES = {
       },
       list: {
         method: 'GET',
-        endpoint: '/api/v2/teams',
+        endpoint: '/api/v2/team',
         description: 'List all Datadog teams with pagination and filtering.',
         schema: {
           page_size: z.number().int().min(1).max(1000).optional().describe('Number of teams to return'),
           page_number: z.number().int().min(0).optional().describe('Page number for pagination'),
           sort: z.enum(['name', 'created_at', 'user_count']).optional().describe('Sort field'),
           filter_keyword: z.string().optional().describe('Filter by keyword'),
+        },
+        queryMap: {
+          page_size: 'page[size]',
+          page_number: 'page[number]',
+          filter_keyword: 'filter[keyword]',
         },
         annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
       },
@@ -372,7 +385,7 @@ const DATADOG_RESOURCES = {
 /**
  * Build a single CRUD tool from a resource + operation definition.
  */
-function createCrudTool(resource, operation, operationConfig) {
+function createCrudTool(resource, operation, operationConfig, jsonApiType) {
   const toolName = `${operation}_${resource}`;
 
   return {
@@ -404,7 +417,24 @@ function createCrudTool(resource, operation, operationConfig) {
         };
 
         if (operationConfig.method === 'GET' || operationConfig.method === 'DELETE') {
-          requestConfig.query = remainingArgs;
+          const queryMap = operationConfig.queryMap;
+          requestConfig.query = queryMap
+            ? Object.fromEntries(
+                Object.entries(remainingArgs).map(([key, value]) => [queryMap[key] || key, value])
+              )
+            : remainingArgs;
+        } else if (jsonApiType) {
+          // v2 resources reject flat bodies; they need {data: {type, attributes}}.
+          const data = { type: jsonApiType, attributes: remainingArgs };
+
+          // Some update endpoints also require the resource id inside the body,
+          // even though it already appears in the path.
+          const idFrom = operationConfig.jsonApiIdFrom;
+          if (idFrom && pathParams[idFrom] !== undefined) {
+            data.id = pathParams[idFrom];
+          }
+
+          requestConfig.body = { data };
         } else {
           requestConfig.body = remainingArgs;
         }
@@ -424,7 +454,7 @@ const CRUD_TOOLS = {};
 
 for (const [resourceName, resourceConfig] of Object.entries(DATADOG_RESOURCES)) {
   for (const [operation, operationConfig] of Object.entries(resourceConfig.operations)) {
-    const tool = createCrudTool(resourceName, operation, operationConfig);
+    const tool = createCrudTool(resourceName, operation, operationConfig, resourceConfig.jsonApiType);
     CRUD_TOOLS[tool.name] = tool;
   }
 }

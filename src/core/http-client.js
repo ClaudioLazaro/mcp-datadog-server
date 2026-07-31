@@ -9,14 +9,24 @@ class DatadogHttpError extends Error {
   }
 }
 
-function buildUrl(baseUrl, rawUrlTemplate, pathParams = {}) {
-  let url = rawUrlTemplate.replace('{{baseUrl}}', baseUrl).replace('{{site}}', baseUrl.split('.').slice(-2).join('.'));
-  
+function buildUrl(baseUrl, rawUrlTemplate, pathParams = {}, site) {
+  // The collection templates embed placeholder query strings (e.g.
+  // `?from=36993837&group_by=consectetur`). Those are Postman example values,
+  // and the same params are already exposed as tool arguments — keeping them
+  // would append a second `?` and send the junk defaults to Datadog.
+  const [template] = rawUrlTemplate.split('?');
+
+  let url = template
+    .replace('{{baseUrl}}', baseUrl)
+    // Use the configured site verbatim; deriving it from baseUrl would collapse
+    // regional hosts like us3.datadoghq.com down to datadoghq.com.
+    .replace('{{site}}', site ?? baseUrl.replace(/^https?:\/\//, ''));
+
   for (const [key, value] of Object.entries(pathParams)) {
     const encoded = encodeURIComponent(String(value));
     url = url.replaceAll(`:${key}`, encoded).replaceAll(`{${key}}`, encoded);
   }
-  
+
   return url;
 }
 
@@ -49,6 +59,9 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Methods that can be safely replayed after a 5xx or network failure.
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']);
+
 export class DatadogClient {
   constructor(config) {
     this.config = config;
@@ -64,7 +77,7 @@ export class DatadogClient {
     headers = {},
     timeoutMs,
   }) {
-    const url = buildUrl(this.baseUrl, rawUrlTemplate, pathParams) + buildQueryString(query);
+    const url = buildUrl(this.baseUrl, rawUrlTemplate, pathParams, this.config.site) + buildQueryString(query);
     const safeHeaders = sanitizeHeaders(headers);
     const requestHeaders = {
       'DD-API-KEY': this.config.credentials.apiKey,
@@ -136,12 +149,29 @@ export class DatadogClient {
           break;
         }
 
+        // Retrying a failed POST/PATCH can duplicate a resource Datadog already
+        // created, so only replay methods that are safe to repeat.
+        if (!IDEMPOTENT_METHODS.has(method) && error.status !== 429) {
+          break;
+        }
+
         let delayMs = this.config.retryBaseMs * Math.pow(2, attempt);
-        
+
         if (error.status === 429 && this.config.respectRetryAfter) {
           const retryAfter = error.response?.headers?.['retry-after'];
           if (retryAfter) {
-            delayMs = parseInt(retryAfter, 10) * 1000;
+            // Retry-After is either delta-seconds or an HTTP-date. Parsing a
+            // date with parseInt yields NaN, which setTimeout treats as 0 and
+            // burns every retry instantly.
+            const seconds = Number(retryAfter);
+            if (Number.isFinite(seconds)) {
+              delayMs = seconds * 1000;
+            } else {
+              const until = Date.parse(retryAfter);
+              if (!Number.isNaN(until)) {
+                delayMs = Math.max(0, until - Date.now());
+              }
+            }
           }
         }
         

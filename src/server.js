@@ -30,10 +30,17 @@ export class DatadogMcpServer {
   constructor(config) {
     this.config = config;
     this.client = new DatadogClient(config);
-    this.server = new McpServer({
-      name: 'mcp-datadog-server',
-      version: getVersion(),
-    });
+    this.server = new McpServer(
+      {
+        name: 'mcp-datadog-server',
+        version: getVersion(),
+      },
+      {
+        // tools/resources/prompts are registered implicitly by McpServer, but
+        // logging must be declared explicitly or sendLoggingMessage is a no-op.
+        capabilities: { logging: {} },
+      }
+    );
     this.tools = new Map();
     this.initialized = false;
   }
@@ -231,10 +238,12 @@ export class DatadogMcpServer {
   async start() {
     await this.initialize();
 
-    // Wire up MCP logging after connection
+    await this.server.connect(new StdioServerTransport());
+
+    // Route logs through MCP only once the transport is attached; before this
+    // point sendLoggingMessage would reject with "Not connected".
     setMcpServer(this.server);
 
-    await this.server.connect(new StdioServerTransport());
     info('Server started on stdio transport');
   }
 
@@ -313,8 +322,15 @@ export class DatadogMcpServer {
 export async function createServer(options = {}) {
   const config = loadConfig(options.env || process.env);
 
-  if (options.schemaPath) {
-    config.schemaPath = path.resolve(process.cwd(), options.schemaPath);
+  // Apply raw overrides first: callers often spread an existing config into
+  // options, and its null `allowedFolders` would otherwise clobber the value
+  // derived from `folders` below.
+  Object.assign(config, options);
+
+  // `--schema` and `--folders` arrive from parseOptions as `schema`/`folders`.
+  const schemaPath = options.schemaPath || options.schema;
+  if (schemaPath) {
+    config.schemaPath = path.resolve(process.cwd(), schemaPath);
   }
 
   if (options.folders) {
@@ -322,8 +338,6 @@ export async function createServer(options = {}) {
       ? options.folders
       : options.folders.split(',').map(f => f.trim()).filter(Boolean);
   }
-
-  Object.assign(config, options);
 
   const server = new DatadogMcpServer(config);
   await server.initialize();
