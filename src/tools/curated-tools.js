@@ -1,6 +1,35 @@
 import { z } from 'zod';
 import { createToolResponse } from './core-tools.js';
 
+/** Shorten a string for digest output, marking that it was cut. */
+function truncate(value, maxLength) {
+  if (typeof value !== 'string') return value;
+  return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
+}
+
+/**
+ * Frequency map, highest first, capped so one noisy dimension cannot
+ * reintroduce the payload bloat the digest exists to avoid.
+ */
+function countBy(items, selector, topN = 15) {
+  const counts = new Map();
+
+  for (const item of items) {
+    const key = selector(item) ?? '(none)';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  const sorted = [...counts].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, topN);
+  const result = Object.fromEntries(top);
+
+  if (sorted.length > topN) {
+    result['(other)'] = sorted.slice(topN).reduce((sum, [, count]) => sum + count, 0);
+  }
+
+  return result;
+}
+
 /**
  * Curated tools: hand-crafted, optimized tools for the most common Datadog operations.
  *
@@ -170,13 +199,18 @@ const CURATED_TOOLS = {
   },
 
   search_logs: {
-    description: 'Search Datadog logs with a query and time range. Supports sorting and pagination.',
+    description: 'Search Datadog logs with a query and time range. Returns a compact digest: '
+      + 'counts by status, service and message, plus one flat line per log. '
+      + 'Set include_attributes for the full raw payload (much larger).',
     schema: {
       query: z.string().optional().describe('Log search query (Datadog log query syntax)'),
       from: z.string().default('now-15m').describe('Start time (e.g., now-1h, 2023-01-01T00:00:00Z)'),
       to: z.string().default('now').describe('End time'),
       limit: z.number().int().min(1).max(1000).default(25).describe('Number of logs to return'),
       sort: z.enum(['timestamp', '-timestamp']).default('-timestamp').describe('Sort order'),
+      cursor: z.string().optional().describe('Pagination cursor from a previous next_cursor'),
+      include_attributes: z.boolean().default(false)
+        .describe('Include full nested attributes and tags per log. Verbose; only when you need a specific field.'),
     },
     annotations: {
       readOnlyHint: true,
@@ -186,9 +220,12 @@ const CURATED_TOOLS = {
     },
 
     async execute(args, client) {
-      const { query, from, to, limit, sort } = args;
+      const { query, from, to, limit, sort, cursor, include_attributes } = args;
 
       try {
+        const page = { limit };
+        if (cursor) page.cursor = cursor;
+
         const response = await client.request({
           method: 'POST',
           rawUrlTemplate: '{{baseUrl}}/api/v2/logs/events/search',
@@ -199,11 +236,42 @@ const CURATED_TOOLS = {
               to,
             },
             sort,
-            page: { limit },
+            page,
           },
         });
 
-        return createToolResponse(response.data);
+        if (include_attributes) {
+          return createToolResponse(response.data);
+        }
+
+        const events = Array.isArray(response.data?.data) ? response.data.data : [];
+
+        // A raw 50-event page is ~85KB, which forces the caller to dump it to
+        // disk and post-process it. Return the aggregates it would compute
+        // anyway, plus one flat line per event.
+        const logs = events.map(event => {
+          const attributes = event.attributes ?? {};
+          return {
+            timestamp: attributes.timestamp,
+            status: attributes.status,
+            service: attributes.service,
+            host: attributes.host,
+            message: truncate(attributes.message, 300),
+          };
+        });
+
+        return createToolResponse({
+          summary: {
+            returned: logs.length,
+            by_status: countBy(logs, log => log.status),
+            by_service: countBy(logs, log => log.service),
+            by_message: countBy(logs, log => log.message),
+          },
+          logs,
+          next_cursor: response.data?.meta?.page?.after,
+          hint: 'Counts are over the returned page only. Use include_attributes for full fields, '
+            + 'or next_cursor to page further.',
+        });
       } catch (error) {
         return createToolResponse(null, error);
       }

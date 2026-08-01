@@ -30,7 +30,7 @@
     "./config": "./src/core/config.js"
   },
   "scripts": {
-    "test": "node --test test/protocol.test.mjs test/request-building.test.mjs",
+    "test": "node --test test/protocol.test.mjs test/request-building.test.mjs test/response-shaping.test.mjs",
     "start": "node src/index.js",
     "serve": "node src/index.js serve",
     "list-tools": "node src/index.js list-tools",
